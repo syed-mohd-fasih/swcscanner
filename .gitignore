@@ -37,3 +37,18 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+!.env.development
+
+# firebase emulators
+.emulator-data/
+firebase-export-*/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# local-only label samples (never committed)
+/samples/
+
+# copied from node_modules by scripts/copy-wasm.ts
+/public/zxing/
