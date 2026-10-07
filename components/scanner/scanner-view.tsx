@@ -20,6 +20,9 @@ const LINEAR: BarcodeFormat[] = ["code_128", "code_39", "code_93", "codabar", "e
 
 export type ScanMode = "linear" | "pdf417"
 
+/** Called with every barcode decoded together; resolve false for "ignored". */
+export type ScanHandler = (scans: RawScan[]) => void | boolean | Promise<void | boolean>
+
 const SAME_VALUE_COOLDOWN_MS = 2000
 const DETECT_INTERVAL_MS = 120
 
@@ -54,7 +57,8 @@ export function ScannerView({
 }: {
   mode: ScanMode
   paused: boolean
-  onScan: (scan: RawScan) => void
+  /** every barcode in the frame; resolve false to skip the beep (ignored read) */
+  onScan: ScanHandler
 }) {
   const { t } = useI18n()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -110,19 +114,20 @@ export function ScannerView({
       const video = videoRef.current
       if (!cancelled && video && video.readyState >= 2 && !pausedRef.current) {
         try {
-          const found = await detector.detect(video)
-          // prefer the 2D code when both are in frame
-          const hit = found.find((b) => b.format === "pdf417") ?? found[0]
-          if (hit?.rawValue) {
+          const found = (await detector.detect(video)).filter((b) => b.rawValue)
+          if (found.length > 0) {
+            // labels can carry several barcodes (DHL); hand over all of them
+            const scans: RawScan[] = found.map((b) => ({
+              raw: b.rawValue,
+              format: b.format === "pdf417" ? "pdf417" : "linear",
+            }))
+            const key = scans.map((x) => x.raw).sort().join("|")
             const now = Date.now()
             const last = lastRef.current
-            if (!last || last.value !== hit.rawValue || now - last.at > SAME_VALUE_COOLDOWN_MS) {
-              lastRef.current = { value: hit.rawValue, at: now }
-              feedback()
-              onScanRef.current({
-                raw: hit.rawValue,
-                format: hit.format === "pdf417" ? "pdf417" : "linear",
-              })
+            if (!last || last.value !== key || now - last.at > SAME_VALUE_COOLDOWN_MS) {
+              lastRef.current = { value: key, at: now }
+              const accepted = await onScanRef.current(scans)
+              if (accepted !== false) feedback()
             }
           }
         } catch {

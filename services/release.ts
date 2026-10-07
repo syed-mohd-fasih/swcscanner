@@ -1,4 +1,4 @@
-import { getParser, type ParseOutcome, type RawScan } from "@/carriers"
+import { resolveScans, type ParseOutcome, type RawScan } from "@/carriers"
 import type { Carrier } from "@/domain/carriers/types"
 import type { Item, ReleaseOutcome } from "@/domain/items/types"
 import { assignOutcome, isReleaseEligible, releaseScan } from "@/domain/release/rules"
@@ -6,7 +6,7 @@ import type { BusinessDate } from "@/domain/shared/dates"
 import type { Result } from "@/domain/shared/result"
 import { itemRepository, localWriter } from "@/repositories/indexeddb"
 import { mutationContext, notFound } from "@/services/context"
-import { findScannedItems } from "@/services/receiving"
+import { firstMatching } from "@/services/receiving"
 
 export type ReleaseLookup = {
   parse: ParseOutcome
@@ -14,10 +14,11 @@ export type ReleaseLookup = {
   pieces: { item: Item; eligible: boolean }[]
 }
 
-export async function lookupReleaseScan(carrier: Carrier, scan: RawScan): Promise<ReleaseLookup> {
-  const parse = getParser(carrier.parser).parse(scan)
-  if (parse.kind !== "parsed") return { parse, pieces: [] }
-  const hits = await findScannedItems(carrier.carrierCode, parse.scan)
+export async function lookupReleaseScan(carrier: Carrier, scans: RawScan[]): Promise<ReleaseLookup> {
+  const resolved = resolveScans(carrier, scans)
+  if (resolved.kind !== "candidates") return { parse: resolved, pieces: [] }
+  const { scan, hits } = await firstMatching(carrier.carrierCode, resolved.candidates)
+  const parse: ParseOutcome = { kind: "parsed", scan }
   const pieces = hits
     .filter((i) => i.receivingState !== "expected")
     .sort((a, b) => (a.manifestId ?? "").localeCompare(b.manifestId ?? "") || a.pieceNumber - b.pieceNumber)

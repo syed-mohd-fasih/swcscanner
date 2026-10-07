@@ -27,6 +27,11 @@ export type ParseOutcome =
   /** the barcode is valid but not the one this carrier's workflow needs */
   | { kind: "wrong_barcode"; hint: "scan_pdf417" }
   | { kind: "unreadable"; reason: string }
+  /**
+   * camera saw only barcodes that don't fit the carrier's item-ID pattern
+   * (e.g. DHL routing/piece codes) — keep scanning, don't interrupt
+   */
+  | { kind: "ignored" }
 
 export interface CarrierParser {
   id: ParserId

@@ -304,6 +304,10 @@ export const en = {
     generic1d: "Normal barcode (lines)",
     fedexPdf417: "FedEx (PDF417)",
     confirmSave: "Save carrier {code}?",
+    idPattern: "Item ID barcode pattern (optional)",
+    idPatternHelp:
+      "Only for labels with several barcodes: the camera uses the barcode that matches. ^\\d{10}$ = exactly 10 digits (DHL waybill). Leave empty if the label has one barcode.",
+    testBarcode: "Test a barcode value",
   },
   users: {
     title: "Users",

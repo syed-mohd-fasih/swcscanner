@@ -6,6 +6,11 @@ export type Carrier = {
   carrierCode: string
   name: string
   parser: ParserId
+  /**
+   * Optional regular expression the item-ID barcode must match, for labels
+   * with several barcodes — e.g. DHL waybill: ^\d{10}$. Admin-editable.
+   */
+  idPattern?: string | null
   active: boolean
   createdAt: string
   updatedAt: string

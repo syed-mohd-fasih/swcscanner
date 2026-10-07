@@ -4,7 +4,7 @@ import { CheckCircle2Icon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
-import { getParser, type RawScan } from "@/carriers"
+import { resolveScans, type RawScan } from "@/carriers"
 import { ItemDetails, useItem } from "@/components/items/item-details"
 import { useSession } from "@/components/providers/session-provider"
 import { ReceiptForm, receiptDraftComplete, toReceiptInput, type ReceiptDraft } from "@/components/receiving/receipt-form"
@@ -74,11 +74,15 @@ export function ReleaseVerifyPanel({ internalItemId }: { internalItemId: string 
   ).data
   const [physicallyScanned, setPhysicallyScanned] = useState(false)
 
-  function onScan(scan: RawScan) {
-    if (!carrier || !item) return
-    const parsed = getParser(carrier.parser).parse(scan)
-    if (parsed.kind === "wrong_barcode") return void toast.warning(t.scanner.scanPdf417)
-    const ids = parsed.kind === "parsed" ? [parsed.scan.itemId, ...(parsed.scan.alternateIds ?? [])] : []
+  function onScan(scans: RawScan[]) {
+    if (!carrier || !item) return false
+    const resolved = resolveScans(carrier, scans)
+    if (resolved.kind === "ignored") return false
+    if (resolved.kind === "wrong_barcode") return void toast.warning(t.scanner.scanPdf417)
+    const ids =
+      resolved.kind === "candidates"
+        ? resolved.candidates.flatMap((c) => [c.itemId, ...(c.alternateIds ?? [])])
+        : []
     if (!ids.includes(item.itemId)) {
       return void toast.error(t.scanner.unreadable)
     }

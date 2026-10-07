@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PARSER_IDS, type Carrier, type ParserId } from "@/domain/carriers/types"
 import { fmt, useI18n } from "@/lib/i18n/client"
+import { compileIdPattern } from "@/carriers"
 import { saveCarrier } from "@/services/config"
 import { pullConfig } from "@/sync/pull"
 
@@ -71,10 +72,14 @@ function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose:
   const [name, setName] = useState(carrier?.name ?? "")
   const [parser, setParser] = useState<ParserId>(carrier?.parser ?? "generic1d")
   const [active, setActive] = useState(carrier?.active ?? true)
+  const [idPattern, setIdPattern] = useState(carrier?.idPattern ?? "")
+  const [sample, setSample] = useState("")
+  const compiled = compileIdPattern(idPattern)
+  const patternInvalid = !!idPattern.trim() && !compiled
 
   async function save() {
     if (!(await confirm({ description: fmt(t.carriers.confirmSave, { code: code.toUpperCase() }) }))) return
-    const result = await saveCarrier({ carrierCode: code, name, parser, active })
+    const result = await saveCarrier({ carrierCode: code, name, parser, idPattern, active })
     if (!result.ok) return void toast.error(result.error.message)
     void sync.flush()
     onClose()
@@ -107,11 +112,35 @@ function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose:
               </SelectContent>
             </Select>
           </Field>
+          <Field label={t.carriers.idPattern} htmlFor="c-pattern">
+            <Input
+              id="c-pattern"
+              dir="ltr"
+              className="h-11 font-mono"
+              placeholder="^\d{10}$"
+              aria-invalid={patternInvalid}
+              value={idPattern}
+              onChange={(e) => setIdPattern(e.target.value)}
+            />
+            <span className="text-xs text-muted-foreground">{t.carriers.idPatternHelp}</span>
+          </Field>
+          {compiled && (
+            <Field label={t.carriers.testBarcode} htmlFor="c-sample">
+              <div className="flex items-center gap-2">
+                <Input id="c-sample" dir="ltr" className="h-11" value={sample} onChange={(e) => setSample(e.target.value)} />
+                {sample && (
+                  <span className={compiled.test(sample.trim()) ? "text-emerald-600" : "text-destructive"}>
+                    {compiled.test(sample.trim()) ? "✓" : "✗"}
+                  </span>
+                )}
+              </div>
+            </Field>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="size-4" checked={active} onChange={(e) => setActive(e.target.checked)} />
             {t.fields.active}
           </label>
-          <Button size="lg" disabled={!code || !name} onClick={() => void save()}>
+          <Button size="lg" disabled={!code || !name || patternInvalid} onClick={() => void save()}>
             {t.app.save}
           </Button>
         </div>

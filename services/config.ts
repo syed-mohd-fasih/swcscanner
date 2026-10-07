@@ -1,3 +1,4 @@
+import { compileIdPattern } from "@/carriers"
 import type { Carrier, ParserId } from "@/domain/carriers/types"
 import {
   locationIdFor,
@@ -52,11 +53,16 @@ export async function saveCarrier(input: {
   carrierCode: string
   name: string
   parser: ParserId
+  idPattern: string
   active: boolean
 }): Promise<Result<Carrier>> {
   const carrierCode = input.carrierCode.trim().toUpperCase()
   if (!/^[A-Z0-9]{2,6}$/.test(carrierCode)) {
     return err("FORBIDDEN", "Carrier code must be 2–6 letters or digits.")
+  }
+  const idPattern = input.idPattern.trim() || null
+  if (idPattern && !compileIdPattern(idPattern)) {
+    return err("FORBIDDEN", "The item ID pattern is not a valid regular expression.")
   }
   const now = nowIso()
   const before = await carrierRepository.get(carrierCode)
@@ -64,6 +70,7 @@ export async function saveCarrier(input: {
     carrierCode,
     name: input.name.trim(),
     parser: input.parser,
+    idPattern,
     active: input.active,
     createdAt: before?.createdAt ?? now,
     updatedAt: now,

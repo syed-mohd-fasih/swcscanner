@@ -1,8 +1,7 @@
 "use client"
 
-import type { RawScan } from "@/carriers"
 import { DevScanPayloads, ManualScanInput } from "@/components/scanner/manual-scan-input"
-import { ScannerView, type ScanMode } from "@/components/scanner/scanner-view"
+import { ScannerView, type ScanHandler, type ScanMode } from "@/components/scanner/scanner-view"
 
 /** Camera first, typed fallback below, dev payloads in development. */
 export function ScanInput({
@@ -12,7 +11,7 @@ export function ScanInput({
 }: {
   mode: ScanMode
   paused: boolean
-  onScan: (scan: RawScan) => void
+  onScan: ScanHandler
 }) {
   return (
     <div className="flex flex-col gap-3">

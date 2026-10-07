@@ -61,7 +61,8 @@ const CARRIERS: Omit<Carrier, "createdAt" | "updatedAt">[] = [
   { carrierCode: "FDX", name: "FedEx", parser: "fedexPdf417", active: true },
   { carrierCode: "TNT", name: "TNT", parser: "generic1d", active: true },
   { carrierCode: "ARX", name: "Aramex", parser: "generic1d", active: true },
-  { carrierCode: "DHL", name: "DHL", parser: "generic1d", active: true },
+  // DHL labels carry 3 barcodes; the manifest uses the 10-digit waybill
+  { carrierCode: "DHL", name: "DHL", parser: "generic1d", idPattern: String.raw`^\d{10}$`, active: true },
 ]
 
 /** Warehouse → lettered rack → position number (as printed on the rack). */
@@ -161,6 +162,10 @@ async function main() {
     line("794600001111", "FDX", 1, { consignee: "TEST CONSIGNEE ONE", weight: 8, description: "SOAP DISPENSERS" }),
     line("794600009999", "FDX", 5, { consignee: "TEST CONSIGNEE TWO", weight: 10, description: "Bolt for bus" }),
   ])
+
+  // DHL arriving today — waybill from a real label (label has 3 barcodes)
+  const mD = manifest("DHL", today, "KWT6006", "DHL: multi-barcode label")
+  addManifest(mD, [line("5111661225", "DHL", 1, { consignee: "TEST CONSIGNEE THREE", description: "Documents" })])
 
   // Release examples (DHL, received last week)
   const mR = manifest("DHL", daysAgo(5), "KWT4004", "Release examples")

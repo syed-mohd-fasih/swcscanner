@@ -63,9 +63,10 @@ export function ReleaseWorkspace() {
   )
 
   const onScan = useCallback(
-    async (scan: RawScan) => {
-      if (!carrier) return
-      const result = await lookupReleaseScan(carrier, scan)
+    async (scans: RawScan[]) => {
+      if (!carrier) return false
+      const result = await lookupReleaseScan(carrier, scans)
+      if (result.parse.kind === "ignored") return false
       if (result.parse.kind === "wrong_barcode") return void toast.warning(t.scanner.scanPdf417)
       if (result.parse.kind === "unreadable") return void toast.error(t.scanner.unreadable)
       setLookup(result)
@@ -115,7 +116,7 @@ export function ReleaseWorkspace() {
           <ScanInput
             mode={carrier?.parser === "fedexPdf417" ? "pdf417" : "linear"}
             paused={lookup !== null}
-            onScan={(s) => void onScan(s)}
+            onScan={onScan}
           />
         </div>
         <Card>

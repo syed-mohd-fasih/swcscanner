@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import { parseFedExPdf417 } from "@/carriers/fedex/fedexPdf417"
 import { FEDEX_1D_SUBPIECE, FEDEX_MULTI_PIECE_4_OF_5, FEDEX_SINGLE_PIECE } from "@/carriers/fedex/fixtures"
-import { getParser } from "@/carriers"
+import { compileIdPattern, getParser, resolveScans } from "@/carriers"
+import type { Carrier } from "@/domain/carriers/types"
 
 describe("generic1d", () => {
   it("normalizes the itemId", () => {
@@ -86,5 +87,55 @@ describe("fedexPdf417", () => {
 
   it("rejects payloads that are not MH10.8.3", () => {
     expect(fedex.parse({ raw: "hello", format: "pdf417" }).kind).toBe("unreadable")
+  })
+})
+
+describe("resolveScans (labels with several barcodes)", () => {
+  const carrier = (parser: Carrier["parser"], idPattern: string | null = null): Carrier => ({
+    carrierCode: "X",
+    name: "X",
+    parser,
+    idPattern,
+    active: true,
+    createdAt: "",
+    updatedAt: "",
+  })
+  const dhl = carrier("generic1d", String.raw`^\d{10}$`)
+  const linear = (raw: string) => ({ raw, format: "linear" as const })
+  // the three barcodes on a real DHL label
+  const DHL_LABEL = [linear("2LKW:KWIKCO+57000001"), linear("JJD014600012794402457"), linear("5111661225")]
+
+  it("picks the DHL waybill out of the three barcodes", () => {
+    const r = resolveScans(dhl, DHL_LABEL)
+    expect(r.kind === "candidates" && r.candidates.map((c) => c.itemId)).toEqual(["5111661225"])
+  })
+
+  it("ignores camera reads that only show non-item barcodes", () => {
+    expect(resolveScans(dhl, [linear("JJD014600012794402457")])).toEqual({ kind: "ignored" })
+  })
+
+  it("trusts typed input even if it does not fit the pattern", () => {
+    const r = resolveScans(dhl, [{ raw: "ABC-1", format: "manual" }])
+    expect(r.kind === "candidates" && r.candidates[0].itemId).toBe("ABC-1")
+  })
+
+  it("without a pattern, keeps every barcode as a candidate", () => {
+    const r = resolveScans(carrier("generic1d"), DHL_LABEL)
+    expect(r.kind === "candidates" && r.candidates).toHaveLength(3)
+  })
+
+  it("FedEx: prefers the PDF417 when both codes are in view", () => {
+    const r = resolveScans(carrier("fedexPdf417"), [linear(FEDEX_1D_SUBPIECE), { raw: FEDEX_SINGLE_PIECE, format: "pdf417" }])
+    expect(r.kind === "candidates" && r.candidates[0].itemId).toBe("794600001111")
+  })
+
+  it("FedEx: only the 1D in view asks for the PDF417", () => {
+    expect(resolveScans(carrier("fedexPdf417"), [linear(FEDEX_1D_SUBPIECE)])).toMatchObject({ kind: "wrong_barcode" })
+  })
+
+  it("an invalid admin pattern is ignored rather than blocking scans", () => {
+    expect(compileIdPattern("([")).toBeNull()
+    const r = resolveScans(carrier("generic1d", "(["), [linear("A-1")])
+    expect(r.kind).toBe("candidates")
   })
 })

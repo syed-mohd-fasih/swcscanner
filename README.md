@@ -84,6 +84,32 @@ Open the `https://….trycloudflare.com` address it prints on the phone. A brand
 
 In development, the receiving and release screens also have a typed-barcode field and test barcodes, so you can run the whole flow without a camera.
 
+## Real Firebase project and Vercel
+
+The cloud project is `swcscanner` (Firestore in `me-central2`). Its public web config is committed in `.env.production`, which `next build` uses. The emulator setup above is unaffected.
+
+**Service-account key.** This is the server's password to Firebase: it lets the app create login sessions and manage users. Keep the JSON outside the repo (`.gitignore` blocks `*firebase-adminsdk*.json` anyway) and never paste it anywhere public. If it leaks, delete it in Firebase console → Project settings → Service accounts and generate a new one.
+
+**One-time setup** (needs `bunx firebase login`):
+
+```bash
+bun run deploy:firestore        # security rules + indexes → swcscanner (indexes take a few minutes to build)
+GOOGLE_APPLICATION_CREDENTIALS="C:/path/to/key.json" bun run setup:cloud -- admin '<password>'
+```
+
+`setup:cloud` creates the first admin, the carriers and `config/versions`. It never deletes anything and can be re-run safely. Then sign in as the admin and add the warehouse locations (Locations) and operator accounts (Users).
+
+Never run `bun run seed` for the cloud: it is emulator-only, and wipes data.
+
+**Vercel:** import the GitHub repo (framework: Next.js; Vercel uses Bun because of `bun.lock`). Under Settings → Environment Variables (Production) add:
+
+| Name | Value |
+|---|---|
+| `FIREBASE_CLIENT_EMAIL` | `client_email` from the key JSON |
+| `FIREBASE_PRIVATE_KEY` | `private_key` from the key JSON, the whole `-----BEGIN PRIVATE KEY----- … -----END PRIVATE KEY-----` block |
+
+Then redeploy. Every push to `main` deploys again.
+
 ## Scripts
 
 | Script | What it does |
@@ -91,6 +117,8 @@ In development, the receiving and release screens also have a typed-barcode fiel
 | `bun run dev` / `dev:lan` | Next dev server (LAN-bound variant for phones) |
 | `bun run emulators` | Firebase emulators, keeping data in `.emulator-data/` |
 | `bun run seed` | Reset the emulators and load demo data |
+| `bun run deploy:firestore` | Deploy rules and indexes to the real project |
+| `bun run setup:cloud` | First admin and carriers in the real project (no wipe) |
 | `bun run test` | Unit tests: domain rules, carrier parsers |
 | `bun run test:rules` | Firestore security-rules tests (needs the emulators running) |
 | `bun run typecheck` / `lint` | Type check and lint |
@@ -114,5 +142,6 @@ UI (app/, components/)  →  services/  →  repositories/ (interfaces)  →  In
 
 - **FedEx PDF417:** the layout is checked against real scans (`carriers/fedex/fedexPdf417.ts`). Two things still need confirming with the client: that `28Z` is the master tracking number on multi-piece labels, and whether manifests list the 12-digit tracking number or the 16-digit one (lookups accept both). The fixtures follow the real structure, with personal data replaced by fake values.
 - **Carrier codes:** carriers are managed by the admin under Admin → Carriers. The seeded codes are placeholders.
+- **Labels with several barcodes:** the camera hands over every barcode in view. A carrier can have an optional "Item ID barcode pattern" (Admin → Carriers, with a tester); DHL uses `^\d{10}$` for its waybill. Barcodes that don't fit are ignored. Carriers without a pattern try every barcode in view against the expected items.
 - **Export format:** add an `ExportFormat` in `services/export.ts`. CSV and JSON exist as placeholders.
 - **Manifest import:** register a `ManifestImporter` in `services/import.ts`.

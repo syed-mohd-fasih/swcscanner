@@ -1,4 +1,4 @@
-import { getParser, type ParsedScan, type ParseOutcome, type RawScan } from "@/carriers"
+import { resolveScans, type ParsedScan, type ParseOutcome, type RawScan } from "@/carriers"
 import type { Carrier } from "@/domain/carriers/types"
 import type { Item, LabelData } from "@/domain/items/types"
 import { rankCandidates, type CandidateGroup } from "@/domain/receiving/candidates"
@@ -19,16 +19,21 @@ export type ScanLookup = {
   groups: CandidateGroup[]
 }
 
-/** Parse with the session carrier's parser, then look up locally. No network. */
+/**
+ * Parse every barcode in view with the session carrier's parser and look up
+ * locally (no network). The first candidate that matches local items wins;
+ * if none match, the best candidate opens the unidentified flow.
+ */
 export async function lookupReceivingScan(
   carrier: Carrier,
-  scan: RawScan,
+  scans: RawScan[],
   sessionDate: BusinessDate
 ): Promise<ScanLookup> {
-  const parse = getParser(carrier.parser).parse(scan)
-  if (parse.kind !== "parsed") return { parse, groups: [] }
+  const resolved = resolveScans(carrier, scans)
+  if (resolved.kind !== "candidates") return { parse: resolved, groups: [] }
 
-  const hits = await findScannedItems(carrier.carrierCode, parse.scan)
+  const { scan, hits } = await firstMatching(carrier.carrierCode, resolved.candidates)
+  const parse: ParseOutcome = { kind: "parsed", scan }
   const manifestIds = [...new Set(hits.map((h) => h.manifestId).filter((m): m is string => !!m))]
   const dates = new Map<string, BusinessDate>()
   for (const id of manifestIds) {
@@ -36,6 +41,18 @@ export async function lookupReceivingScan(
     if (m) dates.set(id, m.date)
   }
   return { parse, groups: rankCandidates(hits, dates, sessionDate) }
+}
+
+/** First candidate with local hits, else the best candidate with none. */
+export async function firstMatching(
+  carrierCode: string,
+  candidates: ParsedScan[]
+): Promise<{ scan: ParsedScan; hits: Item[] }> {
+  for (const scan of candidates) {
+    const hits = await findScannedItems(carrierCode, scan)
+    if (hits.length > 0) return { scan, hits }
+  }
+  return { scan: candidates[0], hits: [] }
 }
 
 /** Local lookup by the scanned ID, falling back to its alternate spellings. */

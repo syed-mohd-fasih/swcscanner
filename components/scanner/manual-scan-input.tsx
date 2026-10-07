@@ -3,13 +3,14 @@
 import { useState } from "react"
 
 import type { RawScan } from "@/carriers"
+import type { ScanHandler } from "@/components/scanner/scanner-view"
 import { FEDEX_1D_SUBPIECE, FEDEX_MULTI_PIECE_4_OF_5, FEDEX_SINGLE_PIECE } from "@/carriers/fedex/fixtures"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useI18n } from "@/lib/i18n/client"
 
 /** Fallback when the camera can't read a label: type the barcode value. */
-export function ManualScanInput({ onScan, disabled }: { onScan: (scan: RawScan) => void; disabled?: boolean }) {
+export function ManualScanInput({ onScan, disabled }: { onScan: ScanHandler; disabled?: boolean }) {
   const { t } = useI18n()
   const [value, setValue] = useState("")
   return (
@@ -18,7 +19,7 @@ export function ManualScanInput({ onScan, disabled }: { onScan: (scan: RawScan) 
       onSubmit={(e) => {
         e.preventDefault()
         if (!value.trim()) return
-        onScan({ raw: value, format: "manual" })
+        void onScan([{ raw: value, format: "manual" }])
         setValue("")
       }}
     >
@@ -44,19 +45,24 @@ export function ManualScanInput({ onScan, disabled }: { onScan: (scan: RawScan) 
  * Development-only test payloads (they match the seed data). Lets the whole
  * flow be exercised without a phone or real labels.
  */
-const DEV_PAYLOADS: { label: string; scan: RawScan }[] = [
-  { label: "1D single (A-1001)", scan: { raw: "A-1001", format: "linear" } },
-  { label: "1D multi-piece (MASTER-001)", scan: { raw: "MASTER-001", format: "linear" } },
-  { label: "1D partly received (MASTER-002)", scan: { raw: "MASTER-002", format: "linear" } },
-  { label: "1D same ID, 2 manifests (DUP-777)", scan: { raw: "DUP-777", format: "linear" } },
-  { label: "1D unknown (UNKNOWN-555)", scan: { raw: "UNKNOWN-555", format: "linear" } },
-  { label: "1D unidentified group (ARX-UNK-1)", scan: { raw: "ARX-UNK-1", format: "linear" } },
-  { label: "FedEx PDF417 single", scan: { raw: FEDEX_SINGLE_PIECE, format: "pdf417" } },
-  { label: "FedEx PDF417 piece 4/5", scan: { raw: FEDEX_MULTI_PIECE_4_OF_5, format: "pdf417" } },
-  { label: "FedEx 1D (wrong barcode)", scan: { raw: FEDEX_1D_SUBPIECE, format: "linear" } },
+const linear = (raw: string): RawScan[] => [{ raw, format: "linear" }]
+
+const DEV_PAYLOADS: { label: string; scans: RawScan[] }[] = [
+  { label: "1D single (A-1001)", scans: linear("A-1001") },
+  { label: "1D multi-piece (MASTER-001)", scans: linear("MASTER-001") },
+  { label: "1D partly received (MASTER-002)", scans: linear("MASTER-002") },
+  { label: "1D same ID, 2 manifests (DUP-777)", scans: linear("DUP-777") },
+  { label: "1D unknown (UNKNOWN-555)", scans: linear("UNKNOWN-555") },
+  { label: "1D unidentified group (ARX-UNK-1)", scans: linear("ARX-UNK-1") },
+  { label: "FedEx PDF417 single", scans: [{ raw: FEDEX_SINGLE_PIECE, format: "pdf417" }] },
+  { label: "FedEx PDF417 piece 4/5", scans: [{ raw: FEDEX_MULTI_PIECE_4_OF_5, format: "pdf417" }] },
+  { label: "FedEx 1D (wrong barcode)", scans: linear(FEDEX_1D_SUBPIECE) },
+  // real DHL label: routing code, piece ID and the 10-digit waybill (the item ID)
+  { label: "DHL label, 3 barcodes", scans: [...linear("2LKW:KWIKCO+57000001"), ...linear("JJD014600012794402457"), ...linear("5111661225")] },
+  { label: "DHL piece barcode only (ignored)", scans: linear("JJD014600012794402457") },
 ]
 
-export function DevScanPayloads({ onScan }: { onScan: (scan: RawScan) => void }) {
+export function DevScanPayloads({ onScan }: { onScan: ScanHandler }) {
   const { t } = useI18n()
   if (process.env.NODE_ENV === "production") return null
   return (
@@ -64,7 +70,7 @@ export function DevScanPayloads({ onScan }: { onScan: (scan: RawScan) => void })
       <summary className="cursor-pointer text-muted-foreground">{t.scanner.devPayloads}</summary>
       <div className="mt-2 flex flex-wrap gap-2" dir="ltr">
         {DEV_PAYLOADS.map((p) => (
-          <Button key={p.label} variant="outline" size="sm" onClick={() => onScan(p.scan)}>
+          <Button key={p.label} variant="outline" size="sm" onClick={() => void onScan(p.scans)}>
             {p.label}
           </Button>
         ))}
