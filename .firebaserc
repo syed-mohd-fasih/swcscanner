@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-swcscanner"
+    "default": "demo-swcscanner",
+    "prod": "swcscanner"
   }
 }

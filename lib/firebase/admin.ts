@@ -1,19 +1,34 @@
 import "server-only"
 
-import { getApps, initializeApp, type App } from "firebase-admin/app"
+import { cert, getApps, initializeApp, type App } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 
+const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true"
+
 /**
- * Server-only Admin SDK. With FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST
- * set (see .env.development) it talks to the emulators and needs no credentials.
+ * Server-only Admin SDK.
+ * - Emulator mode: FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST (see
+ *   .env.development) point it at the emulators; no credentials needed.
+ * - Cloud: FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY (Vercel env vars), or
+ *   GOOGLE_APPLICATION_CREDENTIALS = path to the service-account JSON.
  */
 function adminApp(): App {
-  return (
-    getApps()[0] ??
-    initializeApp({
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "demo-swcscanner",
-    })
+  const existing = getApps()[0]
+  if (existing) return existing
+
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "demo-swcscanner"
+  if (useEmulator) return initializeApp({ projectId })
+
+  // .env.development is loaded under .env.local in `next dev`; never let its
+  // emulator hosts redirect a cloud-configured server
+  delete process.env.FIRESTORE_EMULATOR_HOST
+  delete process.env.FIREBASE_AUTH_EMULATOR_HOST
+
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+  return initializeApp(
+    clientEmail && privateKey ? { projectId, credential: cert({ projectId, clientEmail, privateKey }) } : { projectId },
   )
 }
 

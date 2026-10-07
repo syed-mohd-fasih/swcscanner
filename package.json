@@ -18,6 +18,8 @@
     "test:rules": "vitest run --config vitest.rules.config.ts",
     "emulators": "firebase emulators:start --import ./.emulator-data --export-on-exit ./.emulator-data",
     "seed": "bun --env-file=.env.development scripts/seed.ts",
+    "setup:cloud": "bun --env-file=.env.production scripts/setup-cloud.ts",
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --project prod",
     "postinstall": "bun scripts/copy-wasm.ts"
   },
   "dependencies": {
