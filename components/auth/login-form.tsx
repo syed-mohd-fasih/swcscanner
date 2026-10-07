@@ -43,8 +43,9 @@ export function LoginForm() {
         setError(res.status === 403 ? t.auth.noRole : t.auth.invalid)
         return
       }
+      // dynamic pages are fetched fresh, so no refresh(): calling it here
+      // aborted this navigation's request (AbortError in the console)
       router.replace("/")
-      router.refresh()
     } catch (err) {
       const code = (err as { code?: string }).code
       setError(code === "auth/user-disabled" ? t.auth.disabled : t.auth.invalid)

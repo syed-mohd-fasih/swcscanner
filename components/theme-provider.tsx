@@ -46,12 +46,12 @@ function ThemeHotkey() {
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
-
-      if (event.key.toLowerCase() !== "d") {
+      
+      if (isTypingTarget(event.target)) {
         return
       }
 
-      if (isTypingTarget(event.target)) {
+      if (event.key.toLowerCase() !== "d") {
         return
       }
 

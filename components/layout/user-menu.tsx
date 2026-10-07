@@ -3,7 +3,6 @@
 import { signOut } from "firebase/auth"
 import { ChevronsUpDownIcon, LanguagesIcon, LogOutIcon, MoonIcon, UserIcon } from "lucide-react"
 import { useTheme } from "next-themes"
-import { useRouter } from "next/navigation"
 
 import { useSession } from "@/components/providers/session-provider"
 import {
@@ -22,13 +21,12 @@ export function UserMenu() {
   const { user } = useSession()
   const { t, locale, setLocale } = useI18n()
   const { resolvedTheme, setTheme } = useTheme()
-  const router = useRouter()
 
   async function logout() {
     await signOut(getClientFirebase().auth).catch(() => {})
     await fetch("/api/session", { method: "DELETE" })
-    router.replace("/login")
-    router.refresh()
+    // full reload: nothing of the previous user's in-memory state survives
+    window.location.replace("/login")
   }
 
   return (
