@@ -8,12 +8,11 @@ import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatLocation, type WarehouseLocation } from "@/domain/locations/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
 import { useI18n } from "@/lib/i18n/client"
-import { locationRepository } from "@/repositories/indexeddb"
+import { useLocations } from "@/components/providers/config-provider"
 
 export function useActiveLocations() {
-  return useLocalQuery(() => locationRepository.active(), [])
+  return useLocations(true)
 }
 
 const sortNatural = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true })
@@ -30,7 +29,7 @@ export function LocationSelector({
   onChange: (locationId: string | null) => void
 }) {
   const { t } = useI18n()
-  const { data: locations = [] } = useActiveLocations()
+  const { data: locations } = useActiveLocations()
   const current = locations.find((l) => l.locationId === value)
   // partial choice (warehouse/rack) is local; `value` is only set once a
   // full predefined location is chosen

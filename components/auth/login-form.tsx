@@ -1,6 +1,5 @@
 "use client"
 
-import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { LanguagesIcon } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
@@ -9,8 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { usernameToEmail } from "@/domain/users/types"
-import { getClientFirebase } from "@/lib/firebase/client"
 import { useI18n } from "@/lib/i18n/client"
 
 export function LoginForm() {
@@ -28,27 +25,20 @@ export function LoginForm() {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const { auth } = getClientFirebase()
     try {
-      const cred = await signInWithEmailAndPassword(auth, usernameToEmail(username), password)
-      // force refresh so the token carries the latest role claim
-      const idToken = await cred.user.getIdToken(true)
       const res = await fetch("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ username, password }),
       })
       if (!res.ok) {
-        await signOut(auth)
-        setError(res.status === 403 ? t.auth.noRole : t.auth.invalid)
+        const { error } = (await res.json().catch(() => ({}))) as { error?: string }
+        setError(error === "disabled" ? t.auth.disabled : error === "no_role" ? t.auth.noRole : res.status === 503 ? t.app.error : t.auth.invalid)
         return
       }
-      // dynamic pages are fetched fresh, so no refresh(): calling it here
-      // aborted this navigation's request (AbortError in the console)
       router.replace("/")
-    } catch (err) {
-      const code = (err as { code?: string }).code
-      setError(code === "auth/user-disabled" ? t.auth.disabled : t.auth.invalid)
+    } catch {
+      setError(t.sync.offlineHelp)
     } finally {
       setBusy(false)
     }

@@ -1,27 +1,34 @@
 "use client"
 
-import { ChevronRightIcon, FlagIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "lucide-react"
 import { useState } from "react"
-import { toast } from "sonner"
 
-import { useSession } from "@/components/providers/session-provider"
+import type { ParsedScan } from "@/carriers"
 import { PieceProgress, PieceSelector } from "@/components/receiving/pieces"
 import { ReceiptForm, receiptDraftComplete, toReceiptInput, type ReceiptDraft } from "@/components/receiving/receipt-form"
 import { UnidentifiedForm } from "@/components/receiving/unidentified-form"
 import { Field, InfoList } from "@/components/shared/fields"
-import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { Ltr } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Separator } from "@/components/ui/separator"
-import type { ParsedScan } from "@/carriers"
+import type { Manifest } from "@/domain/manifests/types"
 import type { CandidateGroup } from "@/domain/receiving/candidates"
-import { useLocalQuery } from "@/hooks/use-local-query"
-import { fmt, useI18n } from "@/lib/i18n/client"
-import { manifestRepository } from "@/repositories/indexeddb"
-import { confirmPiece, flagPieceMismatch, recordUnidentifiedPiece, type ScanLookup } from "@/services/receiving"
+import { useI18n } from "@/lib/i18n/client"
+import { submitOp } from "@/lib/submit-op"
+import type { ScanLookup } from "@/server/services/receiving"
+
+/** What the receiving screen shows in "recent scans" after a receipt. */
+export type ReceiptEntry = {
+  key: string
+  itemId: string
+  piece: string
+  kind: "received" | "unidentified"
+  queued: boolean
+  /** manifested piece: one fewer still expected */
+  wasExpected: boolean
+}
 
 type View = { kind: "choose" } | { kind: "group"; key: string } | { kind: "new-unidentified" }
 
@@ -34,24 +41,31 @@ function initialView(lookup: ScanLookup): View {
 
 /**
  * The receiving verification step: the operator compares system data with
- * the physical label, identifies the piece, and commits storage.
+ * the physical label, picks the piece and confirms — one tap, no extra
+ * "are you sure" (the dialog itself is the check).
  */
 export function VerificationDialog({
   lookup,
   carrierCode,
   sessionDate,
   onClose,
+  onRecorded,
 }: {
   lookup: ScanLookup | null
   carrierCode: string
   sessionDate: string
   onClose: () => void
+  onRecorded: (entry: ReceiptEntry) => void
 }) {
   const { t } = useI18n()
   const open = lookup?.parse.kind === "parsed"
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[calc(100svh-1.5rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[calc(100svh-1.5rem)] overflow-y-auto pb-0 sm:max-w-xl"
+        // no focus ring on the first button (and no keyboard popping up)
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         {open && lookup.parse.kind === "parsed" && (
           <VerificationBody
             // remount per scan so local state resets
@@ -60,7 +74,10 @@ export function VerificationDialog({
             scan={lookup.parse.scan}
             carrierCode={carrierCode}
             sessionDate={sessionDate}
-            onDone={onClose}
+            onDone={(entry) => {
+              onRecorded(entry)
+              onClose()
+            }}
           />
         )}
         {!open && <DialogTitle className="sr-only">{t.receiving.itemFound}</DialogTitle>}
@@ -80,7 +97,7 @@ function VerificationBody({
   scan: ParsedScan
   carrierCode: string
   sessionDate: string
-  onDone: () => void
+  onDone: (entry: ReceiptEntry) => void
 }) {
   const { t } = useI18n()
   const [view, setView] = useState<View>(() => initialView(lookup))
@@ -106,7 +123,7 @@ function VerificationBody({
 
   if (view.kind === "choose") {
     return (
-      <>
+      <div className="flex flex-col gap-4 pb-6">
         <DialogHeader>
           <DialogTitle>
             <Ltr>{scan.itemId}</Ltr>
@@ -116,14 +133,18 @@ function VerificationBody({
         <ul className="flex flex-col gap-2">
           {lookup.groups.map((g) => (
             <li key={g.key}>
-              <GroupChoice group={g} onChoose={() => setView({ kind: "group", key: g.key })} />
+              <GroupChoice
+                group={g}
+                manifest={g.manifestId ? lookup.manifests[g.manifestId] : undefined}
+                onChoose={() => setView({ kind: "group", key: g.key })}
+              />
             </li>
           ))}
         </ul>
         <Button variant="outline" onClick={() => setView({ kind: "new-unidentified" })}>
           {t.receiving.notMatching}
         </Button>
-      </>
+      </div>
     )
   }
 
@@ -131,6 +152,7 @@ function VerificationBody({
   return (
     <GroupVerification
       group={group}
+      manifest={group.manifestId ? lookup.manifests[group.manifestId] : undefined}
       scan={scan}
       sessionDate={sessionDate}
       onBack={lookup.groups.length > 1 ? () => setView({ kind: "choose" }) : undefined}
@@ -140,13 +162,8 @@ function VerificationBody({
   )
 }
 
-function useManifest(manifestId: string | null) {
-  return useLocalQuery(() => (manifestId ? manifestRepository.get(manifestId) : Promise.resolve(undefined)), [manifestId]).data
-}
-
-function GroupChoice({ group, onChoose }: { group: CandidateGroup; onChoose: () => void }) {
+function GroupChoice({ group, manifest, onChoose }: { group: CandidateGroup; manifest?: Manifest; onChoose: () => void }) {
   const { t } = useI18n()
-  const manifest = useManifest(group.manifestId)
   const first = group.pieces[0]
   return (
     <button
@@ -177,6 +194,7 @@ function GroupChoice({ group, onChoose }: { group: CandidateGroup; onChoose: () 
 
 function GroupVerification({
   group,
+  manifest,
   scan,
   sessionDate,
   onBack,
@@ -184,102 +202,117 @@ function GroupVerification({
   onDone,
 }: {
   group: CandidateGroup
+  manifest?: Manifest
   scan: ParsedScan
   sessionDate: string
   onBack?: () => void
   onNotMatching: () => void
-  onDone: () => void
+  onDone: (entry: ReceiptEntry) => void
 }) {
   const { t } = useI18n()
-  const { user } = useSession()
-  const confirm = useConfirm()
-  const manifest = useManifest(group.manifestId)
   const first = group.pieces[0]
   const available = group.progress.available
   const preset = scan.pieceNumber && available.includes(scan.pieceNumber) ? scan.pieceNumber : null
   const [piece, setPiece] = useState<number | null>(preset ?? (available.length === 1 ? available[0] : null))
   const [draft, setDraft] = useState<ReceiptDraft>({ path: "store_later", dateOfReceival: sessionDate })
+  const [more, setMore] = useState(false)
   const [showMismatch, setShowMismatch] = useState(false)
   const [labelTotal, setLabelTotal] = useState(scan.pieceTotal && scan.pieceTotal !== group.pieceTotal ? String(scan.pieceTotal) : "")
   const [busy, setBusy] = useState(false)
 
   const isUnidentified = group.kind === "unidentified"
   const canConfirm = piece !== null && available.includes(piece) && receiptDraftComplete(draft)
-  const pieceLabel = `${piece}/${group.pieceTotal}`
 
   async function confirmReceived() {
     if (!canConfirm || piece === null) return
-    const ok = await confirm({
-      description: fmt(isUnidentified ? t.receiving.confirmUnidentifiedText : t.receiving.confirmReceiveText, {
-        piece: pieceLabel,
-        itemId: group.itemId,
-      }),
-    })
-    if (!ok) return
+    const label = `${group.itemId} ${piece}/${group.pieceTotal}`
     setBusy(true)
-    const result = isUnidentified
-      ? await recordUnidentifiedPiece(
+    const outcome = isUnidentified
+      ? await submitOp(
+          t,
+          "recordUnidentified",
           {
-            ...toReceiptInput(draft),
-            label: {
-              itemId: first.itemId,
-              carrierCode: first.carrierCode,
-              shipper: first.shipper,
-              consignee: first.consignee,
-              weight: first.weight,
-              description: first.description,
+            piece: {
+              ...toReceiptInput(draft),
+              label: {
+                itemId: first.itemId,
+                carrierCode: first.carrierCode,
+                shipper: first.shipper,
+                consignee: first.consignee,
+                weight: first.weight,
+                description: first.description,
+              },
+              pieceNumber: piece,
+              pieceTotal: group.pieceTotal,
             },
-            pieceNumber: piece,
-            pieceTotal: group.pieceTotal,
           },
-          user.uid
+          label,
+          t.receiving.unidentifiedSaved
         )
-      : await confirmPiece(group.pieces.find((p) => p.pieceNumber === piece)!.internalItemId, toReceiptInput(draft), user.uid)
+      : await submitOp(
+          t,
+          "receivePiece",
+          { internalItemId: group.pieces.find((p) => p.pieceNumber === piece)!.internalItemId, receipt: toReceiptInput(draft) },
+          label,
+          t.receiving.received
+        )
     setBusy(false)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(isUnidentified ? t.receiving.unidentifiedSaved : t.receiving.received)
-    onDone()
+    if (outcome.status === "failed") return
+    onDone({
+      key: `${group.key}#${piece}`,
+      itemId: group.itemId,
+      piece: `${piece}/${group.pieceTotal}`,
+      kind: isUnidentified ? "unidentified" : "received",
+      queued: outcome.status === "queued",
+      wasExpected: !isUnidentified,
+    })
   }
 
   async function flagMismatch() {
     const target = group.pieces.find((p) => p.pieceNumber === piece) ?? group.pieces[0]
-    const ok = await confirm({ description: fmt(t.receiving.confirmFlagText, { itemId: group.itemId }) })
-    if (!ok) return
     const total = labelTotal ? Number(labelTotal) : null
-    const result = await flagPieceMismatch(target.internalItemId, total, null, user.uid)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(t.receiving.flagged)
-    setShowMismatch(false)
+    const outcome = await submitOp(
+      t,
+      "flagMismatch",
+      { internalItemId: target.internalItemId, labelTotal: total, note: null },
+      `${group.itemId} ≠ ${total ?? "?"}`,
+      t.receiving.flagged
+    )
+    if (outcome.status !== "failed") setShowMismatch(false)
   }
 
   return (
     <>
       <DialogHeader>
         <DialogTitle className="flex flex-wrap items-center gap-2">
-          {isUnidentified ? t.receiving.existingUnidentified : t.receiving.itemFound}
+          <Ltr>{group.itemId}</Ltr>
+          {isUnidentified && <Badge variant="outline">{t.states.receiving.unidentified}</Badge>}
         </DialogTitle>
-        <DialogDescription>{t.receiving.checkLabel}</DialogDescription>
+        <DialogDescription>
+          {isUnidentified ? t.receiving.existingUnidentified : <Ltr>{manifest?.manifestName ?? t.states.manifest}</Ltr>}
+        </DialogDescription>
       </DialogHeader>
 
       <InfoList
         rows={[
-          { label: t.fields.itemId, value: <Ltr>{group.itemId}</Ltr> },
-          ...(isUnidentified
-            ? [{ label: t.states.manifest, value: t.states.noManifest }]
-            : [
-                { label: t.states.manifest, value: <Ltr>{manifest?.manifestName ?? "—"}</Ltr> },
-                { label: t.receiving.manifestDate, value: <Ltr>{group.manifestDate ?? "—"}</Ltr> },
-              ]),
-          { label: t.fields.carrier, value: <Ltr>{first.carrierCode}</Ltr> },
-          { label: t.fields.shipper, value: first.shipper && <Ltr>{first.shipper}</Ltr> },
           { label: t.fields.consignee, value: first.consignee && <Ltr>{first.consignee}</Ltr> },
-          { label: t.fields.weight, value: first.weight !== null && <Ltr>{first.weight}</Ltr> },
-          { label: t.fields.description, value: first.description && <Ltr>{first.description}</Ltr> },
           { label: t.fields.quantity, value: <Ltr>{group.pieceTotal}</Ltr> },
+          ...(more
+            ? [
+                { label: t.fields.shipper, value: first.shipper && <Ltr>{first.shipper}</Ltr> },
+                { label: t.fields.description, value: first.description && <Ltr>{first.description}</Ltr> },
+                { label: t.fields.weight, value: first.weight !== null && <Ltr>{first.weight}</Ltr> },
+                { label: t.fields.carrier, value: <Ltr>{first.carrierCode}</Ltr> },
+                ...(isUnidentified ? [] : [{ label: t.receiving.manifestDate, value: <Ltr>{group.manifestDate ?? "—"}</Ltr> }]),
+              ]
+            : []),
         ]}
       />
+      <Button variant="ghost" size="sm" className="-mt-2 self-start" onClick={() => setMore((m) => !m)}>
+        <ChevronDownIcon className={more ? "rotate-180" : undefined} />
+        {more ? t.receiving.lessDetails : t.receiving.moreDetails}
+      </Button>
 
-      <Separator />
       <PieceProgress progress={group.progress} />
 
       {available.length === 0 ? (
@@ -290,9 +323,6 @@ function GroupVerification({
             <PieceSelector total={group.pieceTotal} available={available} value={piece} onChange={setPiece} />
           </Field>
           <ReceiptForm value={draft} onChange={setDraft} />
-          <Button size="lg" className="h-12" disabled={!canConfirm || busy} onClick={() => void confirmReceived()}>
-            {isUnidentified ? t.receiving.recordUnidentified : t.receiving.confirmReceived}
-          </Button>
         </>
       )}
 
@@ -333,6 +363,16 @@ function GroupVerification({
           </Button>
         )}
       </div>
+
+      {available.length > 0 && (
+        <div className="sticky bottom-0 -mx-6 border-t bg-background px-6 py-3">
+          <Button size="lg" className="h-12 w-full" disabled={!canConfirm || busy} onClick={() => void confirmReceived()}>
+            {isUnidentified ? t.receiving.recordUnidentified : t.receiving.confirmReceived}
+            {piece !== null && <Ltr> · {piece}/{group.pieceTotal}</Ltr>}
+          </Button>
+        </div>
+      )}
+      {available.length === 0 && <div className="pb-6" />}
     </>
   )
 }

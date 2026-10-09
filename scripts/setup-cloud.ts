@@ -2,8 +2,8 @@
  * One-time setup of a real Firebase project (never wipes anything):
  *   GOOGLE_APPLICATION_CREDENTIALS=<service-account.json> \
  *     bun run setup:cloud -- <admin-username> <admin-password>
- * Creates the first ADMIN (skipped if the username exists), the carriers and
- * config/versions. Locations are added afterwards by the admin (Locations).
+ * Creates the first ADMIN (skipped if the username exists) and the carriers.
+ * Locations are added afterwards by the admin (Locations).
  */
 import { readFileSync } from "node:fs"
 
@@ -60,7 +60,6 @@ async function ensureCarriers() {
     batch.set(ref, { ...c, createdAt: now, updatedAt: now })
     added++
   }
-  batch.set(db.collection("config").doc("versions"), { carriers: now }, { merge: true })
   await batch.commit()
   console.log(`✓ ${added} carrier(s) added (existing ones left unchanged)`)
 }
@@ -69,8 +68,6 @@ async function main() {
   console.log(`Setting up Firebase project ${PROJECT} …`)
   await ensureAdmin()
   await ensureCarriers()
-  const versions = db.collection("config").doc("versions")
-  if (!(await versions.get()).data()?.locations) await versions.set({ locations: now }, { merge: true })
   console.log("Done. Sign in as the admin, then add warehouse locations and users.")
 }
 

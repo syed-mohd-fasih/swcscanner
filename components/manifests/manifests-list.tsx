@@ -1,51 +1,55 @@
 "use client"
 
-import { PlusIcon } from "lucide-react"
+import { ChevronRightIcon, PlusIcon } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
-import { useSession } from "@/components/providers/session-provider"
-import { DataTable, type Column } from "@/components/shared/data-table"
-import { useCarriers } from "@/components/shared/fields"
+import { useCarriers } from "@/components/providers/config-provider"
 import { PageHeader } from "@/components/shared/page-header"
-import { ALL, FilterBar, matchesSearch, SearchBar } from "@/components/shared/search-filter"
-import { Ltr, LoadingState } from "@/components/shared/states"
+import { ALL, FilterBar, SearchBar } from "@/components/shared/search-filter"
+import { EmptyState, Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import type { Manifest } from "@/domain/manifests/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
 import { useI18n } from "@/lib/i18n/client"
-import { manifestRepository } from "@/repositories/indexeddb"
-import { adminPull } from "@/sync/pull"
 
-export function ManifestsList() {
+export type ManifestRow = { manifest: Manifest; received: number; total: number }
+
+/**
+ * Newest first. Search matches the start of the manifest name (e.g.
+ * "TNT-10-8"); search and carrier live in the URL so the server filters.
+ */
+export function ManifestsList({
+  rows,
+  hasMore,
+  query,
+  carrier,
+}: {
+  rows: ManifestRow[]
+  hasMore: boolean
+  query: string
+  carrier: string
+}) {
   const { t } = useI18n()
-  const { ready } = useSession()
   const router = useRouter()
-  const carriers = useCarriers(false).data ?? []
-  const [query, setQuery] = useState("")
-  const [carrier, setCarrier] = useState(ALL)
-  const { data: manifests = [], loading } = useLocalQuery(() => manifestRepository.all(), [])
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const { data: carriers } = useCarriers(false)
+  const [text, setText] = useState(query)
 
+  const setParam = (key: string, value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    router.replace(`${pathname}?${next}`)
+  }
+
+  // debounce typing; the server does the search (indexed prefix)
   useEffect(() => {
-    if (ready) adminPull.manifests().catch(() => {})
-  }, [ready])
-
-  const rows = useMemo(
-    () =>
-      manifests
-        .filter((m) => carrier === ALL || m.carrierCode === carrier)
-        .filter((m) => matchesSearch(query, m.manifestName, m.truckId, m.date))
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
-    [manifests, carrier, query]
-  )
-
-  const columns: Column<Manifest>[] = [
-    { key: "name", header: t.fields.manifestName, cell: (m) => <Ltr className="font-medium">{m.manifestName}</Ltr> },
-    { key: "date", header: t.fields.manifestDate, cell: (m) => <Ltr>{m.date}</Ltr> },
-    { key: "carrier", header: t.fields.carrier, cell: (m) => <Ltr>{m.carrierCode}</Ltr> },
-    { key: "truck", header: t.fields.truckId, cell: (m) => <Ltr>{m.truckId || "—"}</Ltr> },
-  ]
+    if (text === query) return
+    const timer = setTimeout(() => setParam("q", text.trim()), 400)
+    return () => clearTimeout(timer)
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,24 +65,48 @@ export function ManifestsList() {
         }
       />
       <div className="flex flex-col gap-2 sm:flex-row">
-        <SearchBar value={query} onChange={setQuery} />
+        <SearchBar value={text} onChange={setText} />
         <FilterBar
           filters={[
             {
               key: "carrier",
               label: t.fields.carrier,
-              value: carrier,
-              onChange: setCarrier,
+              value: carrier || ALL,
+              onChange: (v) => setParam("carrier", v === ALL ? "" : v),
               options: carriers.map((c) => ({ value: c.carrierCode, label: c.name })),
             },
           ]}
         />
       </div>
-      {loading ? (
-        <LoadingState />
+      {rows.length === 0 ? (
+        <EmptyState />
       ) : (
-        <DataTable columns={columns} rows={rows} rowKey={(m) => m.manifestId} onRowClick={(m) => router.push(`/manifests/${m.manifestId}`)} />
+        <ul className="flex flex-col gap-2">
+          {rows.map(({ manifest: m, received, total }) => {
+            const pct = total > 0 ? Math.round((received / total) * 100) : 0
+            return (
+              <li key={m.manifestId}>
+                <Link
+                  href={`/manifests/${m.manifestId}`}
+                  className="flex items-center gap-3 rounded-2xl border p-3 transition-colors hover:bg-muted/50"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <Ltr className="truncate font-semibold">{m.manifestName}</Ltr>
+                    <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+                      <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {t.manifests.received}: <Ltr className="tabular-nums">{received}/{total}</Ltr>
+                    </span>
+                  </span>
+                  <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
       )}
+      {hasMore && <p className="text-center text-sm text-muted-foreground">{t.manifests.narrowSearch}</p>}
     </div>
   )
 }

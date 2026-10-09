@@ -4,7 +4,7 @@ import { SESSION_COOKIE } from "@/lib/auth/constants"
 
 /**
  * Optimistic check only: bounce requests without a session cookie to /login.
- * Real authorization happens in lib/auth/dal.ts and the Firestore rules.
+ * Real authorization happens in lib/auth/dal.ts (pages and server actions).
  */
 export function proxy(request: NextRequest) {
   if (!request.cookies.has(SESSION_COOKIE)) {
@@ -16,5 +16,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // everything except login, API routes, Next internals and static files
-  matcher: ["/((?!login|api|identitytoolkit.googleapis.com|securetoken.googleapis.com|google.firestore.v1.Firestore|v1/projects|_next/static|_next/image|favicon.ico|manifest.webmanifest|zxing|.*\\.(?:png|svg|ico|wasm)$).*)"],
+  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico|manifest.webmanifest|zxing|.*\\.(?:png|svg|ico|wasm)$).*)"],
 }

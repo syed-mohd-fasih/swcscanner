@@ -2,7 +2,7 @@ import "server-only"
 
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
+import { getFirestore, initializeFirestore, type Firestore } from "firebase-admin/firestore"
 
 const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true"
 
@@ -33,4 +33,20 @@ function adminApp(): App {
 }
 
 export const adminAuth = () => getAuth(adminApp())
-export const adminDb = () => getFirestore(adminApp())
+let db: Firestore | undefined
+
+/**
+ * Firestore via REST in the cloud: faster cold starts on serverless than gRPC
+ * (this app never uses realtime listeners).
+ */
+export function adminDb(): Firestore {
+  if (db) return db
+  const app = adminApp()
+  try {
+    // the emulator only speaks gRPC without credentials
+    db = initializeFirestore(app, { preferRest: !useEmulator })
+  } catch {
+    db = getFirestore(app) // already initialized (dev hot reload)
+  }
+  return db
+}

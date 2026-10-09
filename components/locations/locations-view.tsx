@@ -1,36 +1,33 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
+
+import { addLocationsAction, setLocationActiveAction } from "@/app/actions/admin"
+import { useLocations } from "@/components/providers/config-provider"
 
 import { useSession } from "@/components/providers/session-provider"
 import { Field } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
-import { EmptyState, Ltr, LoadingState } from "@/components/shared/states"
+import { EmptyState, Ltr } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { WAREHOUSE_CODE, type WarehouseLocation } from "@/domain/locations/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
 import { fmt, useI18n } from "@/lib/i18n/client"
+import { callAction } from "@/lib/submit-op"
 import { cn } from "@/lib/utils"
-import { locationRepository } from "@/repositories/indexeddb"
-import { addLocations, setLocationActive } from "@/services/config"
-import { pullConfig } from "@/sync/pull"
 
 const natural = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true })
 
 /** Predefined Warehouse → Shelf → Position dataset; admin-only changes. */
 export function LocationsView() {
   const { t } = useI18n()
-  const { ready, isAdmin } = useSession()
-  const { data: locations, loading } = useLocalQuery(() => locationRepository.all(), [])
-
-  useEffect(() => {
-    if (ready) pullConfig().catch(() => {})
-  }, [ready])
+  const { isAdmin } = useSession()
+  const { data: locations } = useLocations()
 
   const tree = useMemo(() => {
     const map = new Map<string, Map<string, WarehouseLocation[]>>()
@@ -46,9 +43,7 @@ export function LocationsView() {
     <div className="flex flex-col gap-4">
       <PageHeader title={t.locations.title} />
       {isAdmin && <AddLocationsForm />}
-      {loading ? (
-        <LoadingState />
-      ) : tree.size === 0 ? (
+      {tree.size === 0 ? (
         <EmptyState />
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
@@ -87,6 +82,7 @@ export function LocationsView() {
 
 function LocationChip({ location, editable }: { location: WarehouseLocation; editable: boolean }) {
   const { t } = useI18n()
+  const router = useRouter()
   const confirm = useConfirm()
   const label = `${location.rack}-${location.position}`
   if (!editable) {
@@ -107,8 +103,8 @@ function LocationChip({ location, editable }: { location: WarehouseLocation; edi
           destructive: location.active,
         })
         if (!ok) return
-        const result = await setLocationActive(location.locationId, !location.active)
-        if (!result.ok) toast.error(result.error.message)
+        const saved = await callAction(t, () => setLocationActiveAction({ locationId: location.locationId, active: !location.active }))
+        if (saved) router.refresh()
       }}
       className={cn(
         "rounded-full border px-2.5 py-1 text-xs font-medium hover:bg-muted",
@@ -122,6 +118,7 @@ function LocationChip({ location, editable }: { location: WarehouseLocation; edi
 
 function AddLocationsForm() {
   const { t } = useI18n()
+  const router = useRouter()
   const confirm = useConfirm()
   const [form, setForm] = useState({ warehouse: "", rackFrom: "A", rackTo: "A", positionFrom: "1", positionTo: "1" })
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -142,9 +139,10 @@ function AddLocationsForm() {
   async function submit() {
     if (specs.length === 0) return
     if (!(await confirm({ description: fmt(t.locations.confirmAdd, { n: specs.length }) }))) return
-    const result = await addLocations(specs)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(`${t.items.corrected} (${result.value.length})`)
+    const created = await callAction(t, () => addLocationsAction({ specs }))
+    if (!created) return
+    toast.success(`${t.items.corrected} (${created.length})`)
+    router.refresh()
   }
 
   return (

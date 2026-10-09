@@ -1,8 +1,6 @@
 import type { Item } from "@/domain/items/types"
 import { formatLocation, type WarehouseLocation } from "@/domain/locations/types"
 import type { Manifest } from "@/domain/manifests/types"
-import { err, ok, type Result } from "@/domain/shared/result"
-import { itemRepository, localWriter } from "@/repositories/indexeddb"
 
 /**
  * Export/archive. The final file format is NOT decided yet — formats are
@@ -95,18 +93,3 @@ export function download(format: ExportFormat, rows: ExportRow[], baseName: stri
   URL.revokeObjectURL(url)
 }
 
-const FINAL = new Set(["released", "repossessed", "seized"])
-
-/**
- * Remove exported records from the operational database. Only pieces with a
- * final outcome may be archived — active inventory is never deleted here.
- */
-export async function archiveExported(internalItemIds: string[]): Promise<Result<number>> {
-  const items = await itemRepository.getMany(internalItemIds)
-  const active = items.filter((i) => !FINAL.has(i.releaseState))
-  if (active.length) {
-    return err("PIECE_NOT_ELIGIBLE", "Only released, repossessed or seized pieces can be archived.", active.map((i) => i.internalItemId))
-  }
-  await localWriter.commit({ items: { delete: items } })
-  return ok(items.length)
-}

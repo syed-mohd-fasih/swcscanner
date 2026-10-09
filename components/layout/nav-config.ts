@@ -8,7 +8,6 @@ import {
   MapPinIcon,
   PackageCheckIcon,
   PackageOpenIcon,
-  RefreshCwIcon,
   ScanLineIcon,
   SettingsIcon,
   TruckIcon,
@@ -36,7 +35,6 @@ export const operatorNav: NavItem[] = [
   { href: "/unidentified", label: "unidentified", icon: HelpCircleIcon, primary: true },
   { href: "/release", label: "release", icon: PackageOpenIcon, primary: true },
   { href: "/locations", label: "locations", icon: MapPinIcon },
-  { href: "/sync", label: "sync", icon: RefreshCwIcon },
 ]
 
 /** Admin-only additions (admins also get the operator links). */
@@ -49,6 +47,9 @@ export const adminNav: NavItem[] = [
   { href: "/admin/export", label: "export", icon: DownloadIcon },
   { href: "/admin/system", label: "system", icon: GaugeIcon },
 ]
+
+/** Phone bottom-bar entry for admins (the admin hub). */
+export const adminTab: NavItem = { href: "/admin", label: "admin", icon: SettingsIcon, primary: true }
 
 export function navFor(role: Role): { operator: NavItem[]; admin: NavItem[] } {
   return { operator: operatorNav, admin: role === "ADMIN" ? adminNav : [] }

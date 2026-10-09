@@ -1,11 +1,9 @@
 "use client"
 
-import { where } from "firebase/firestore"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { useSession } from "@/components/providers/session-provider"
-import { useLocationMap } from "@/components/release/release-workspace"
+import { archiveAction, exportPreviewAction, type ExportPreview } from "@/app/actions/admin"
 import { DataTable, type Column } from "@/components/shared/data-table"
 import { DateInput, Field, useCarriers } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
@@ -15,23 +13,18 @@ import { LoadingState } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RELEASE_STATES, type Item } from "@/domain/items/types"
+import { RELEASE_STATES } from "@/domain/items/types"
 import { todayBusinessDate } from "@/domain/shared/dates"
 import { fmt, useI18n } from "@/lib/i18n/client"
-import { manifestRepository } from "@/repositories/indexeddb"
-import { localCache } from "@/repositories/indexeddb"
-import { remote } from "@/repositories/firestore/remote"
-import { archiveExported, download, EXPORT_FORMATS, toExportRows, type ExportRow } from "@/services/export"
-import { adminPull } from "@/sync/pull"
+import { callAction } from "@/lib/submit-op"
+import { download, EXPORT_FORMATS, type ExportRow } from "@/services/export"
 
 const PREVIEW_ROWS = 50
 
 /** Filters → preview → download; optional archive (delete) after export. */
 export function ExportView() {
   const { t } = useI18n()
-  const { sync } = useSession()
   const confirm = useConfirm()
-  const locations = useLocationMap()
   const carriers = useCarriers(false).data ?? []
   const firstOfMonth = todayBusinessDate().slice(0, 8) + "01"
   const [from, setFrom] = useState(firstOfMonth)
@@ -39,29 +32,26 @@ export function ExportView() {
   const [carrier, setCarrier] = useState(ALL)
   const [release, setRelease] = useState(ALL)
   const [formatId, setFormatId] = useState(EXPORT_FORMATS[0].id)
-  const [items, setItems] = useState<Item[] | null>(null)
-  const [rows, setRows] = useState<ExportRow[]>([])
+  const [data, setData] = useState<ExportPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [exported, setExported] = useState(false)
+
+  // carrier / release filters apply to the fetched range on the device
+  const kept = useMemo(() => {
+    if (!data) return []
+    return data.meta.flatMap((m, i) =>
+      (carrier === ALL || m.carrierCode === carrier) && (release === ALL || m.releaseState === release) ? [i] : []
+    )
+  }, [data, carrier, release])
+  const rows = useMemo(() => kept.map((i) => data!.rows[i]), [kept, data])
 
   async function preview() {
     setLoading(true)
     setExported(false)
-    try {
-      const fetched = await remote.itemsWhere(where("dateOfReceival", ">=", from), where("dateOfReceival", "<=", to))
-      const filtered = fetched
-        .filter((i) => carrier === ALL || i.carrierCode === carrier)
-        .filter((i) => release === ALL || i.releaseState === release)
-      await localCache.put("items", filtered)
-      await adminPull.manifests()
-      const manifests = new Map((await manifestRepository.all()).map((m) => [m.manifestId, m]))
-      setItems(filtered)
-      setRows(toExportRows(filtered, manifests, locations))
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setLoading(false)
-    }
+    const fetched = await callAction(t, () => exportPreviewAction({ from, to }))
+    setLoading(false)
+    if (fetched) setData(fetched)
+    if (fetched?.truncated) toast.warning(t.export.truncated)
   }
 
   async function doExport() {
@@ -72,14 +62,13 @@ export function ExportView() {
   }
 
   async function doArchive() {
-    if (!items) return
-    const ok = await confirm({ description: fmt(t.export.confirmArchive, { n: items.length }), irreversible: true })
+    if (!data) return
+    const ids = kept.map((i) => data.meta[i].internalItemId)
+    const ok = await confirm({ description: fmt(t.export.confirmArchive, { n: ids.length }), irreversible: true })
     if (!ok) return
-    const result = await archiveExported(items.map((i) => i.internalItemId))
-    if (!result.ok) return void toast.error(result.error.message)
-    void sync.flush()
-    setItems([])
-    setRows([])
+    const archived = await callAction(t, () => archiveAction({ internalItemIds: ids }))
+    if (archived === null) return
+    setData(null)
   }
 
   const columns = useMemo<Column<ExportRow>[]>(
@@ -142,7 +131,7 @@ export function ExportView() {
       {loading ? (
         <LoadingState />
       ) : (
-        items && (
+        data && (
           <>
             <p className="text-sm text-muted-foreground">{fmt(t.export.rows, { n: rows.length })}</p>
             <DataTable columns={columns} rows={rows.slice(0, PREVIEW_ROWS)} rowKey={(r) => String(r.internalItemId)} />

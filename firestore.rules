@@ -1,115 +1,12 @@
 rules_version = '2';
 
-// Authoritative authorization for local-first writes (they bypass the Next
-// server). Role comes from the `role` custom claim set by the Admin SDK.
+// The browser never talks to Firestore directly: every read and write goes
+// through the Next.js server (Admin SDK, which bypasses these rules), where
+// server actions check the signed-in user's role. So clients get nothing.
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function signedIn() { return request.auth != null; }
-    function isAdmin() { return signedIn() && request.auth.token.role == 'ADMIN'; }
-    function isOperator() { return signedIn() && request.auth.token.role in ['OPERATOR', 'ADMIN']; }
-
-    // Every update must be exactly one version ahead — stale offline writes
-    // are rejected instead of silently overwriting newer server state.
-    function nextVersion() {
-      return request.resource.data.version == resource.data.version + 1;
-    }
-    function changedOnly(keys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
-    }
-
-    match /items/{internalItemId} {
-      allow read: if isOperator();
-
-      // Operators may only create unidentified pieces; admins create anything
-      // (manifest expansion, corrections).
-      allow create: if isAdmin() || (
-        isOperator()
-        && request.resource.data.internalItemId == internalItemId
-        && request.resource.data.receivingState == 'unidentified'
-        && request.resource.data.manifestId == null
-        && request.resource.data.releaseState == 'not_released'
-        && (request.resource.data.storageState == null
-            || request.resource.data.storageState == 'direct_release')
-        && request.resource.data.locationId == null
-        && request.resource.data.receivedBy == request.auth.uid
-        && request.resource.data.version == 1
-      );
-
-      allow update: if nextVersion() && (isAdmin() || (
-        isOperator() && (operatorReceive() || operatorStore() || operatorReleaseScan() || operatorFlag())
-      ));
-
-      allow delete: if isAdmin();
-
-      // expected → received, once (duplicate-piece guard). No location yet:
-      // either awaiting the store step (null) or direct release.
-      function operatorReceive() {
-        return resource.data.receivingState == 'expected'
-          && request.resource.data.receivingState == 'received'
-          && (request.resource.data.storageState == null
-              || request.resource.data.storageState == 'direct_release')
-          && request.resource.data.locationId == null
-          && request.resource.data.receivedBy == request.auth.uid
-          && changedOnly(['receivingState', 'storageState', 'locationId', 'dateOfReceival',
-                          'receivedBy', 'receivedAt', 'updatedAt', 'version']);
-      }
-
-      // the separate store step: awaiting storage → stored at a location, once
-      function operatorStore() {
-        return resource.data.receivingState != 'expected'
-          && resource.data.storageState == null
-          && resource.data.releaseState == 'not_released'
-          && request.resource.data.storageState == 'stored'
-          && request.resource.data.locationId is string
-          && exists(/databases/$(database)/documents/locations/$(request.resource.data.locationId))
-          && request.resource.data.storedBy == request.auth.uid
-          && changedOnly(['storageState', 'locationId', 'storedBy', 'storedAt', 'updatedAt', 'version']);
-      }
-
-      // not_released → release_scanned, only for physically received pieces
-      function operatorReleaseScan() {
-        return resource.data.receivingState != 'expected'
-          && resource.data.storageState != null
-          && resource.data.releaseState == 'not_released'
-          && request.resource.data.releaseState == 'release_scanned'
-          && request.resource.data.releaseScannedBy == request.auth.uid
-          && changedOnly(['releaseState', 'releaseScannedBy', 'releaseScannedAt', 'updatedAt', 'version']);
-      }
-
-      // must actually change the flag — not a disguised version bump
-      function operatorFlag() {
-        return changedOnly(['quantityMismatch', 'updatedAt', 'version'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasAny(['quantityMismatch']);
-      }
-    }
-
-    match /manifests/{manifestId} {
-      allow read: if isOperator();
-      allow create: if isAdmin();
-      allow update: if isAdmin() && nextVersion();
-      allow delete: if isAdmin();
-    }
-
-    match /locations/{locationId} {
-      allow read: if isOperator();
-      allow write: if isAdmin();
-    }
-
-    match /carriers/{carrierCode} {
-      allow read: if isOperator();
-      allow write: if isAdmin();
-    }
-
-    match /config/{doc} {
-      allow read: if isOperator();
-      allow write: if isAdmin();
-    }
-
-    // Profiles are written only by the Admin SDK (server route handlers).
-    match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if false;
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

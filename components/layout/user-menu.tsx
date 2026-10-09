@@ -1,6 +1,5 @@
 "use client"
 
-import { signOut } from "firebase/auth"
 import { ChevronsUpDownIcon, LanguagesIcon, LogOutIcon, MoonIcon, UserIcon } from "lucide-react"
 import { useTheme } from "next-themes"
 
@@ -14,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
-import { getClientFirebase } from "@/lib/firebase/client"
 import { useI18n } from "@/lib/i18n/client"
 
 export function UserMenu() {
@@ -23,7 +21,6 @@ export function UserMenu() {
   const { resolvedTheme, setTheme } = useTheme()
 
   async function logout() {
-    await signOut(getClientFirebase().auth).catch(() => {})
     await fetch("/api/session", { method: "DELETE" })
     // full reload: nothing of the previous user's in-memory state survives
     window.location.replace("/login")

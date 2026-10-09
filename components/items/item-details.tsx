@@ -1,59 +1,38 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+
+import { correctItemAction } from "@/app/actions/admin"
 
 import { ReceivingStatus, ReleaseOutcome, StorageStatus, MismatchBadge } from "@/components/items/status-badges"
 import { LocationBadge } from "@/components/locations/location-selector"
+import { useLocationMap } from "@/components/providers/config-provider"
 import { useSession } from "@/components/providers/session-provider"
 import { Field, InfoList } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
-import { Ltr, LoadingState, EmptyState } from "@/components/shared/states"
+import { Ltr, EmptyState } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { Item } from "@/domain/items/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
+import type { Manifest } from "@/domain/manifests/types"
+import { newId } from "@/domain/shared/ids"
 import { useI18n } from "@/lib/i18n/client"
-import { itemRepository, locationRepository, manifestRepository } from "@/repositories/indexeddb"
-import { correctItem } from "@/services/manifests"
-import { adminPull } from "@/sync/pull"
-
-export function useItem(internalItemId: string) {
-  const { ready } = useSession()
-  const query = useLocalQuery(() => itemRepository.get(internalItemId), [internalItemId])
-  const [fetched, setFetched] = useState(false)
-  useEffect(() => {
-    if (!ready || query.loading || query.data || fetched) return
-    // not on this device yet — fetch the one document
-    adminPull
-      .item(internalItemId)
-      .catch(() => {})
-      .finally(() => setFetched(true))
-  }, [ready, query.loading, query.data, fetched, internalItemId])
-  return { item: query.data, loading: query.loading || (!query.data && !fetched) }
-}
+import { callAction } from "@/lib/submit-op"
 
 /** Item detail with the lifecycle dimensions shown independently. */
-export function ItemDetails({ internalItemId }: { internalItemId: string }) {
+export function ItemDetails({ item, manifest }: { item: Item | null; manifest: Manifest | null }) {
   const { t, locale } = useI18n()
   const { isAdmin } = useSession()
-  const { item, loading } = useItem(internalItemId)
-  const manifest = useLocalQuery(
-    () => (item?.manifestId ? manifestRepository.get(item.manifestId) : Promise.resolve(undefined)),
-    [item?.manifestId]
-  ).data
-  const location = useLocalQuery(
-    () => (item?.locationId ? locationRepository.get(item.locationId) : Promise.resolve(undefined)),
-    [item?.locationId]
-  ).data
+  const locations = useLocationMap()
   const [editing, setEditing] = useState(false)
 
-  if (loading) return <LoadingState />
-  if (!item) return <EmptyState title={t.items.notOnDevice} />
+  if (!item) return <EmptyState title={t.items.notFound} />
+  const location = item.locationId ? locations.get(item.locationId) : undefined
 
   const time = (iso: string | null) =>
     iso ? <Ltr>{new Date(iso).toLocaleString(locale === "ar" ? "ar-u-nu-latn" : "en-GB")}</Ltr> : null
@@ -156,7 +135,7 @@ export function ItemDetails({ internalItemId }: { internalItemId: string }) {
 
 function CorrectionDialog({ item, onClose }: { item: Item; onClose: () => void }) {
   const { t } = useI18n()
-  const { user } = useSession()
+  const router = useRouter()
   const confirm = useConfirm()
   const [form, setForm] = useState({
     itemId: item.itemId,
@@ -172,22 +151,27 @@ function CorrectionDialog({ item, onClose }: { item: Item; onClose: () => void }
 
   async function save() {
     if (!(await confirm({}))) return
-    const result = await correctItem(
-      item.internalItemId,
-      {
-        itemId: form.itemId.trim(),
-        shipper: form.shipper.trim() || null,
-        consignee: form.consignee.trim() || null,
-        weight: form.weight ? Number(form.weight) : null,
-        description: form.description.trim() || null,
-        dateOfReceival: form.dateOfReceival || null,
-        ...(form.clearMismatch ? { quantityMismatch: null } : {}),
-      },
-      user.uid
+    const saved = await callAction(
+      t,
+      () =>
+        correctItemAction({
+          opId: newId(),
+          internalItemId: item.internalItemId,
+          patch: {
+            itemId: form.itemId.trim(),
+            shipper: form.shipper.trim() || null,
+            consignee: form.consignee.trim() || null,
+            weight: form.weight ? Number(form.weight) : null,
+            description: form.description.trim() || null,
+            dateOfReceival: form.dateOfReceival || null,
+          },
+          clearMismatch: form.clearMismatch,
+        }),
+      t.items.corrected
     )
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(t.items.corrected)
+    if (!saved) return
     onClose()
+    router.refresh()
   }
 
   return (

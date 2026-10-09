@@ -4,8 +4,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Carrier } from "@/domain/carriers/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
-import { carrierRepository } from "@/repositories/indexeddb"
 import { cn } from "@/lib/utils"
 
 export function Field({
@@ -50,12 +48,7 @@ export function DateInput({
   )
 }
 
-export function useCarriers(activeOnly = true) {
-  return useLocalQuery(
-    async () => (await carrierRepository.all()).filter((c) => !activeOnly || c.active).sort((a, b) => a.name.localeCompare(b.name)),
-    [activeOnly]
-  )
-}
+export { useCarriers } from "@/components/providers/config-provider"
 
 export function CarrierSelect({
   id,

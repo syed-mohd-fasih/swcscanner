@@ -13,6 +13,8 @@ export type Manifest = {
   /** expected arrival date */
   date: BusinessDate
   notes: string | null
+  /** pieces created with the manifest (progress denominator, no extra reads) */
+  pieceCount?: number
   createdAt: string
   updatedAt: string
   version: number
@@ -42,4 +44,13 @@ export type ManifestSummary = {
   repossessed: number
   seized: number
   flagged: number
+}
+
+/** The fields an admin types (or imports) for a new manifest. */
+export type ManifestHeader = {
+  manifestName: string
+  truckId: string
+  carrierCode: string
+  date: BusinessDate
+  notes: string | null
 }
