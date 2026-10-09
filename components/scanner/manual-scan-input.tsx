@@ -66,7 +66,7 @@ export function DevScanPayloads({ onScan }: { onScan: ScanHandler }) {
   const { t } = useI18n()
   if (process.env.NODE_ENV === "production") return null
   return (
-    <details className="rounded-xl border p-3 text-sm">
+    <details className="surface p-3 text-sm">
       <summary className="cursor-pointer text-muted-foreground">{t.scanner.devPayloads}</summary>
       <div className="mt-2 flex flex-wrap gap-2" dir="ltr">
         {DEV_PAYLOADS.map((p) => (

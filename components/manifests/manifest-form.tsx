@@ -190,7 +190,7 @@ export function ManifestForm() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {lines.map((l, index) => (
-            <div key={l.key} className="grid grid-cols-2 gap-2 rounded-2xl border p-3 md:grid-cols-[2fr_1fr_1.5fr_1.5fr_0.7fr_0.8fr_2fr_auto] md:items-end">
+            <div key={l.key} className="surface grid grid-cols-2 gap-2 p-3 animate-in fade-in-0 slide-in-from-top-1 md:grid-cols-[2fr_1fr_1.5fr_1.5fr_0.7fr_0.8fr_2fr_auto] md:items-end">
               <Field label={`${index + 1}. ${t.fields.itemId}`} className="col-span-2 md:col-span-1">
                 <Input dir="ltr" className="h-11" value={l.itemId} onChange={(e) => update(l.key, { itemId: e.target.value })} />
               </Field>

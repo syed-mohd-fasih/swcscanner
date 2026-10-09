@@ -4,6 +4,7 @@ import { MapPinIcon, RefreshCwIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 
+import { Callout } from "@/components/shared/callout"
 import { LocationSelector, useActiveLocations } from "@/components/locations/location-selector"
 import { useCarriers } from "@/components/providers/config-provider"
 import { PageHeader } from "@/components/shared/page-header"
@@ -119,7 +120,7 @@ export function StorageView({ items: initial, hasMore }: { items: Item[]; hasMor
             const ids = g.pieces.map((p) => p.internalItemId)
             const all = ids.every((id) => selected.has(id))
             return (
-              <li key={g.key} className="rounded-2xl border p-3">
+              <li key={g.key} className={cn("surface p-3 transition-shadow", all && "ring-2 ring-primary/40")}>
                 <label className="flex items-start gap-3">
                   <Checkbox
                     className="mt-0.5 size-5"
@@ -149,8 +150,8 @@ export function StorageView({ items: initial, hasMore }: { items: Item[]; hasMor
                         aria-pressed={on}
                         onClick={() => toggle([p.internalItemId], !on)}
                         className={cn(
-                          "min-h-10 min-w-14 rounded-xl border px-3 text-sm font-medium tabular-nums",
-                          on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted"
+                          "min-h-11 min-w-14 rounded-xl border px-3 text-sm font-medium tabular-nums transition-all duration-150",
+                          on ? "scale-105 border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25" : "bg-card hover:bg-muted active:scale-95"
                         )}
                       >
                         <Ltr>
@@ -165,17 +166,19 @@ export function StorageView({ items: initial, hasMore }: { items: Item[]; hasMor
           })}
         </ul>
       )}
-      {hasMore && <p className="text-center text-sm text-muted-foreground">{fmt(t.storage.hasMore, { n: initial.length })}</p>}
+      {hasMore && <Callout tone="info">{fmt(t.storage.hasMore, { n: initial.length })}</Callout>}
 
       {/* sticky action bar, above the phone bottom tabs */}
       <div
         className={cn(
-          "fixed inset-x-0 bottom-16 z-20 border-t bg-background/95 px-3 py-3 backdrop-blur transition md:bottom-0 md:ps-[calc(var(--sidebar-width)+0.75rem)]",
-          selected.size === 0 && "pointer-events-none translate-y-4 opacity-0"
+          "fixed inset-x-0 bottom-16 z-20 border-t bg-card/95 px-3 py-3 shadow-[0_-4px_16px_-6px] shadow-foreground/15 backdrop-blur transition-all duration-300 ease-out md:bottom-0 md:ps-[calc(var(--sidebar-width)+0.75rem)]",
+          selected.size === 0 && "pointer-events-none translate-y-full opacity-0"
         )}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <span className="text-sm font-medium">{fmt(t.storage.selected, { n: selected.size })}</span>
+          <span key={selected.size} className="text-sm font-semibold text-primary-ink animate-in zoom-in-95 fade-in-0">
+            {fmt(t.storage.selected, { n: selected.size })}
+          </span>
           <Button size="lg" className="h-12" onClick={() => setSheetOpen(true)}>
             <MapPinIcon />
             {t.storage.chooseLocation}

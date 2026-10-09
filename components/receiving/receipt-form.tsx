@@ -38,8 +38,8 @@ export function ReceiptForm({ value, onChange }: { value: ReceiptDraft; onChange
       aria-checked={value.path === path}
       onClick={() => onChange({ ...value, path })}
       className={cn(
-        "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-start text-sm font-medium",
-        value.path === path ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted"
+        "flex min-h-12 items-center gap-2 rounded-xl border px-3 py-2 text-start text-sm font-medium transition-all duration-150",
+        value.path === path ? "border-primary bg-primary/10 text-primary-ink ring-1 ring-primary/30" : "bg-card hover:bg-muted active:scale-[0.98]"
       )}
     >
       <Icon className="size-4 shrink-0" />

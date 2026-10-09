@@ -1,6 +1,6 @@
 "use client"
 
-import { RefreshCwIcon } from "lucide-react"
+import { LoaderIcon, RefreshCwIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { matchesSearch, SearchBar } from "@/components/shared/search-filter"
 import { SessionPicker } from "@/components/shared/session-picker"
 import { EmptyState, Ltr, LoadingState } from "@/components/shared/states"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -119,7 +120,12 @@ export function ReleaseWorkspace() {
       />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-2">
-          {checking && <LoadingState label={t.receiving.checking} />}
+          {checking && (
+            <p className="flex items-center gap-2 text-sm font-medium text-info-ink animate-in fade-in-0">
+              <LoaderIcon className="size-4 animate-spin" />
+              {t.receiving.checking}
+            </p>
+          )}
           <ScanInput
             mode={carrier?.parser === "fedexPdf417" ? "pdf417" : "linear"}
             paused={lookup !== null || checking}
@@ -236,18 +242,17 @@ function ReleaseScanDialog({
                   disabled={!ok}
                   onClick={() => setSelected(item.internalItemId)}
                   className={cn(
-                    "flex w-full flex-col gap-1.5 rounded-2xl border p-3 text-start",
-                    active && "border-primary bg-primary/10",
-                    !ok && "cursor-not-allowed opacity-60"
+                    "surface flex w-full flex-col gap-1.5 p-3 text-start transition-all duration-150",
+                    active && "border-primary bg-primary/5 ring-2 ring-primary/40",
+                    ok && !active && "hover:shadow-md active:scale-[0.99]",
+                    !ok && "cursor-not-allowed opacity-70"
                   )}
                 >
                   <span className="flex items-center justify-between gap-2 font-semibold">
                     <span>
                       {t.fields.piece} <Ltr>{item.pieceNumber}/{item.pieceTotal}</Ltr>
                     </span>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {ok ? t.release.eligible : t.release.notEligible}
-                    </span>
+                    <Badge variant={ok ? "success" : "neutral"}>{ok ? t.release.eligible : t.release.notEligible}</Badge>
                   </span>
                   <span className="flex flex-wrap gap-1">
                     <LocationBadge location={item.locationId ? locations.get(item.locationId) : null} />

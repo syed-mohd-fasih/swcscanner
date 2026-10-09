@@ -3,55 +3,64 @@
 import { FlagIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import type { Item, ReceivingState, ReleaseState, StorageState } from "@/domain/items/types"
+import type { InvestigationStatus, Item, ReceivingState, ReleaseState, StorageState } from "@/domain/items/types"
 import { useI18n } from "@/lib/i18n/client"
 import { cn } from "@/lib/utils"
 
-const tone = {
-  neutral: "border-border bg-muted text-muted-foreground",
-  info: "border-transparent bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  good: "border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-  warn: "border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  bad: "border-transparent bg-red-500/15 text-red-700 dark:text-red-300",
-  accent: "border-transparent bg-violet-500/15 text-violet-700 dark:text-violet-300",
-}
+/**
+ * One meaning per colour, everywhere in the app:
+ * neutral = not started · info = next step pending · success = done ·
+ * warning = needs attention · danger = failed / final negative · accent = brand / chosen
+ */
+export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "accent"
 
-function StateBadge({ label, kind }: { label: string; kind: keyof typeof tone }) {
+export function StateBadge({ label, tone, className }: { label: React.ReactNode; tone: Tone; className?: string }) {
   return (
-    <Badge variant="outline" className={cn("font-medium", tone[kind])}>
+    <Badge variant={tone} className={cn("font-medium", className)}>
       {label}
     </Badge>
   )
 }
 
+export const receivingTone: Record<ReceivingState, Tone> = {
+  expected: "neutral",
+  received: "success",
+  unidentified: "warning",
+}
+
+export const releaseTone: Record<ReleaseState, Tone> = {
+  not_released: "neutral",
+  release_scanned: "info",
+  released: "success",
+  repossessed: "warning",
+  seized: "danger",
+}
+
 export function ReceivingStatus({ state }: { state: ReceivingState }) {
   const { t } = useI18n()
-  const kind = state === "received" ? "good" : state === "unidentified" ? "warn" : "neutral"
-  return <StateBadge label={t.states.receiving[state]} kind={kind} />
+  return <StateBadge label={t.states.receiving[state]} tone={receivingTone[state]} />
 }
 
 export function StorageStatus({ state }: { state: StorageState | null }) {
   const { t } = useI18n()
-  if (!state) return <StateBadge label={t.states.storage.none} kind="neutral" />
-  return <StateBadge label={t.states.storage[state]} kind={state === "stored" ? "info" : "accent"} />
+  if (!state) return <StateBadge label={t.states.storage.none} tone="info" />
+  return <StateBadge label={t.states.storage[state]} tone={state === "stored" ? "success" : "accent"} />
 }
 
 export function ReleaseOutcome({ state }: { state: ReleaseState }) {
   const { t } = useI18n()
-  const kind: Record<ReleaseState, keyof typeof tone> = {
-    not_released: "neutral",
-    release_scanned: "info",
-    released: "good",
-    repossessed: "warn",
-    seized: "bad",
-  }
-  return <StateBadge label={t.states.release[state]} kind={kind[state]} />
+  return <StateBadge label={t.states.release[state]} tone={releaseTone[state]} />
+}
+
+export function InvestigationBadge({ status }: { status: InvestigationStatus }) {
+  const { t } = useI18n()
+  return <StateBadge label={t.states.investigation[status]} tone={status === "open" ? "warning" : "info"} />
 }
 
 export function MismatchBadge() {
   const { t } = useI18n()
   return (
-    <Badge variant="destructive" className="gap-1">
+    <Badge variant="warning" className="gap-1">
       <FlagIcon className="size-3" />
       {t.states.mismatch}
     </Badge>

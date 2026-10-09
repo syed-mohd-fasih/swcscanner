@@ -34,7 +34,7 @@ export function CarriersView() {
     {
       key: "active",
       header: t.fields.status,
-      cell: (c) => <Badge variant={c.active ? "secondary" : "destructive"}>{c.active ? t.fields.active : t.locations.inactive}</Badge>,
+      cell: (c) => <Badge variant={c.active ? "success" : "neutral"}>{c.active ? t.fields.active : t.locations.inactive}</Badge>,
     },
   ]
 

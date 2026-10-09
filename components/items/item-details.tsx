@@ -73,7 +73,7 @@ export function ItemDetails({ item, manifest }: { item: Item | null; manifest: M
                     <Ltr>{manifest?.manifestName ?? item.manifestId}</Ltr>
                   )
                 ) : (
-                  <Badge variant="outline">{t.states.noManifest}</Badge>
+                  <Badge variant="warning">{t.states.noManifest}</Badge>
                 ),
               },
               { label: t.fields.status, value: <ReceivingStatus state={item.receivingState} /> },

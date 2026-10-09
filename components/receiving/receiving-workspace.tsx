@@ -20,6 +20,7 @@ import type { ScanLookup } from "@/server/services/receiving"
 import { useWorkSession } from "@/hooks/use-work-session"
 import { errorText, failureText } from "@/lib/errors"
 import { fmt, useI18n } from "@/lib/i18n/client"
+import { cn } from "@/lib/utils"
 
 const RECENT_MAX = 20
 
@@ -120,7 +121,7 @@ export function ReceivingWorkspace() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-2">
           {checking && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 text-sm font-medium text-info-ink animate-in fade-in-0">
               <LoaderIcon className="size-4 animate-spin" />
               {t.receiving.checking}
             </p>
@@ -140,16 +141,23 @@ export function ReceivingWorkspace() {
               <p className="text-sm text-muted-foreground">{t.receiving.noRecent}</p>
             ) : (
               <ul className="flex flex-col divide-y">
-                {recent.map((entry) => (
-                  <li key={entry.key} className="flex items-center justify-between gap-2 py-2 text-sm">
+                {recent.map((entry, i) => (
+                  <li
+                    key={entry.key}
+                    className={cn(
+                      "-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-2.5 text-sm",
+                      // the newest receipt slides in with a short green flash
+                      i === 0 && "animate-flash animate-in fade-in-0 slide-in-from-top-2 duration-300"
+                    )}
+                  >
                     <span className="flex min-w-0 items-center gap-2">
                       {entry.queued ? (
-                        <CloudUploadIcon className="size-4 shrink-0 text-muted-foreground" aria-label={t.sync.waiting} />
+                        <CloudUploadIcon className="size-4 shrink-0 text-info animate-attention" aria-label={t.sync.waiting} />
                       ) : (
-                        <CheckCircle2Icon className="size-4 shrink-0 text-primary" />
+                        <CheckCircle2Icon className="size-4 shrink-0 text-success" />
                       )}
                       <Ltr className="truncate font-medium">{entry.itemId}</Ltr>
-                      {entry.kind === "unidentified" && <Badge variant="outline">{t.states.receiving.unidentified}</Badge>}
+                      {entry.kind === "unidentified" && <Badge variant="warning">{t.states.receiving.unidentified}</Badge>}
                     </span>
                     <Ltr className="text-muted-foreground tabular-nums">{entry.piece}</Ltr>
                   </li>

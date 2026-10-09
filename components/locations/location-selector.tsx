@@ -126,7 +126,7 @@ function buildTree(locations: WarehouseLocation[]) {
 export function LocationBadge({ location }: { location: WarehouseLocation | undefined | null }) {
   if (!location) return null
   return (
-    <Badge variant="outline" className="gap-1">
+    <Badge variant="accent" className="gap-1">
       <MapPinIcon className="size-3" />
       <Ltr>{formatLocation(location)}</Ltr>
     </Badge>

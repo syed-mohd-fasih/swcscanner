@@ -110,7 +110,7 @@ export function ReleaseVerifyPanel({ item, manifest }: { item: Item | null; mani
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {physicallyScanned ? (
-              <p className="flex items-center gap-2 text-sm font-medium text-emerald-600">
+              <p className="flex items-center gap-2 text-sm font-medium text-success-ink animate-in fade-in-0 zoom-in-95">
                 <CheckCircle2Icon className="size-4" />
                 {t.release.scanned}
               </p>

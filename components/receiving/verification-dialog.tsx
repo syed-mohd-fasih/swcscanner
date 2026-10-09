@@ -4,6 +4,7 @@ import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "lucide-react"
 import { useState } from "react"
 
 import type { ParsedScan } from "@/carriers"
+import { Callout } from "@/components/shared/callout"
 import { PieceProgress, PieceSelector } from "@/components/receiving/pieces"
 import { ReceiptForm, receiptDraftComplete, toReceiptInput, type ReceiptDraft } from "@/components/receiving/receipt-form"
 import { UnidentifiedForm } from "@/components/receiving/unidentified-form"
@@ -169,14 +170,14 @@ function GroupChoice({ group, manifest, onChoose }: { group: CandidateGroup; man
     <button
       type="button"
       onClick={onChoose}
-      className="flex w-full items-center gap-3 rounded-2xl border p-3 text-start hover:bg-muted"
+      className="surface-interactive flex w-full items-center gap-3 p-3 text-start"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
         <div className="flex flex-wrap items-center gap-2">
           {group.kind === "manifested" ? (
             <Ltr className="font-semibold">{manifest?.manifestName ?? t.states.manifest}</Ltr>
           ) : (
-            <Badge variant="outline">{t.states.receiving.unidentified}</Badge>
+            <Badge variant="warning">{t.states.receiving.unidentified}</Badge>
           )}
           {group.manifestDate && <Ltr className="text-muted-foreground">{group.manifestDate}</Ltr>}
         </div>
@@ -286,7 +287,7 @@ function GroupVerification({
       <DialogHeader>
         <DialogTitle className="flex flex-wrap items-center gap-2">
           <Ltr>{group.itemId}</Ltr>
-          {isUnidentified && <Badge variant="outline">{t.states.receiving.unidentified}</Badge>}
+          {isUnidentified && <Badge variant="warning">{t.states.receiving.unidentified}</Badge>}
         </DialogTitle>
         <DialogDescription>
           {isUnidentified ? t.receiving.existingUnidentified : <Ltr>{manifest?.manifestName ?? t.states.manifest}</Ltr>}
@@ -316,7 +317,7 @@ function GroupVerification({
       <PieceProgress progress={group.progress} />
 
       {available.length === 0 ? (
-        <p className="rounded-xl bg-muted p-3 text-sm">{t.receiving.allFound}</p>
+        <Callout tone="success">{t.receiving.allFound}</Callout>
       ) : (
         <>
           <Field label={t.receiving.whichPiece}>
@@ -333,7 +334,7 @@ function GroupVerification({
           </Button>
         )}
         {showMismatch ? (
-          <div className="flex items-end gap-2 rounded-xl border p-3">
+          <div className="tone-warning flex items-end gap-2 rounded-xl border p-3 animate-in fade-in-0 slide-in-from-top-1">
             <Field label={t.receiving.labelQuantity} htmlFor="label-total" className="flex-1">
               <Input
                 id="label-total"
@@ -346,13 +347,13 @@ function GroupVerification({
                 onChange={(e) => setLabelTotal(e.target.value)}
               />
             </Field>
-            <Button variant="destructive" className="h-11" onClick={() => void flagMismatch()}>
+            <Button variant="warning" className="h-11" onClick={() => void flagMismatch()}>
               <FlagIcon />
               {t.app.confirm}
             </Button>
           </div>
         ) : (
-          <Button variant="ghost" onClick={() => setShowMismatch(true)}>
+          <Button variant="ghost" className="text-warning-ink" onClick={() => setShowMismatch(true)}>
             <FlagIcon />
             {t.receiving.quantityDiffers}
           </Button>
@@ -365,7 +366,7 @@ function GroupVerification({
       </div>
 
       {available.length > 0 && (
-        <div className="sticky bottom-0 -mx-6 border-t bg-background px-6 py-3">
+        <div className="sticky bottom-0 -mx-6 border-t bg-popover/95 px-6 py-3 backdrop-blur">
           <Button size="lg" className="h-12 w-full" disabled={!canConfirm || busy} onClick={() => void confirmReceived()}>
             {isUnidentified ? t.receiving.recordUnidentified : t.receiving.confirmReceived}
             {piece !== null && <Ltr> · {piece}/{group.pieceTotal}</Ltr>}

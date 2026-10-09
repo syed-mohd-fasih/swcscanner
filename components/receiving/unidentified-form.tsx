@@ -129,7 +129,7 @@ export function UnidentifiedForm({
         />
       </Field>
       <ReceiptForm value={draft} onChange={setDraft} />
-      <div className="sticky bottom-0 -mx-6 border-t bg-background px-6 py-3">
+      <div className="sticky bottom-0 -mx-6 border-t bg-popover/95 px-6 py-3 backdrop-blur">
         <Button size="lg" className="h-12 w-full" disabled={!valid || busy} onClick={() => void submit()}>
           {t.receiving.recordUnidentified}
         </Button>

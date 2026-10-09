@@ -3,6 +3,7 @@
 import { RefreshCwIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+import { Callout } from "@/components/shared/callout"
 import { useRetryQueue } from "@/components/providers/session-provider"
 import { InfoList } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
@@ -64,9 +65,9 @@ export function SystemView({ usage, projectId, emulator }: { usage: Usage; proje
               </p>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <Callout tone={usage.reason === "emulator" ? "info" : "warning"}>
               {usage.reason === "emulator" ? t.usage.emulator : usage.reason === "permission" ? t.usage.permission : t.usage.unavailable}
-            </p>
+            </Callout>
           )}
         </CardContent>
       </Card>
@@ -105,7 +106,7 @@ function Meter({ label, meter, bytes = false }: { label: string; meter: UsageMet
       </div>
       <div className="h-2.5 overflow-hidden rounded-full bg-muted" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
         <div
-          className={cn("h-full rounded-full", share >= 0.8 ? "bg-destructive" : share >= 0.6 ? "bg-amber-500" : "bg-primary")}
+          className={cn("h-full rounded-full transition-[width] duration-700 ease-out", share >= 0.8 ? "bg-destructive" : share >= 0.6 ? "bg-warning" : "bg-success")}
           style={{ width: `${pct}%` }}
         />
       </div>

@@ -188,15 +188,15 @@ export function ScannerView({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-black sm:aspect-video">
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-black shadow-md sm:aspect-video">
         <video ref={videoRef} playsInline muted className="size-full object-cover" />
         {running && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div
               className={
                 mode === "pdf417"
-                  ? "h-2/5 w-4/5 rounded-xl border-2 border-white/80"
-                  : "h-1/4 w-4/5 rounded-xl border-2 border-white/80"
+                  ? "h-2/5 w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgb(0_0_0/0.25)] animate-scan-frame"
+                  : "h-1/4 w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgb(0_0_0/0.25)] animate-scan-frame"
               }
             />
           </div>

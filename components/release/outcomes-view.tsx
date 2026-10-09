@@ -138,10 +138,10 @@ export function OutcomesView({ items, manifestNames }: { items: Item[]; manifest
           </Field>
           <span className="text-sm text-muted-foreground sm:mb-3">{fmt(t.outcomes.selected, { n: selected.size })}</span>
           <div className="grid grid-cols-3 gap-2 sm:ms-auto sm:flex">
-            <Button disabled={selected.size === 0 || busy || !date} onClick={() => void apply("released")}>
+            <Button variant="success" disabled={selected.size === 0 || busy || !date} onClick={() => void apply("released")}>
               {t.outcomes.markReleased}
             </Button>
-            <Button variant="secondary" disabled={selected.size === 0 || busy || !date} onClick={() => void apply("repossessed")}>
+            <Button variant="warning" disabled={selected.size === 0 || busy || !date} onClick={() => void apply("repossessed")}>
               {t.outcomes.markRepossessed}
             </Button>
             <Button variant="destructive" disabled={selected.size === 0 || busy || !date} onClick={() => void apply("seized")}>

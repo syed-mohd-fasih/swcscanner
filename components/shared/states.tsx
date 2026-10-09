@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n/client"
 export function EmptyState({ title, description, action }: { title?: string; description?: string; action?: React.ReactNode }) {
   const { t } = useI18n()
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-8 text-center">
+    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed bg-card/50 p-8 text-center animate-in fade-in-0 duration-300">
       <InboxIcon className="size-8 text-muted-foreground" />
       <p className="font-medium">{title ?? t.app.noResults}</p>
       {description && <p className="max-w-sm text-sm text-muted-foreground">{description}</p>}
@@ -30,8 +30,8 @@ export function LoadingState({ label }: { label?: string }) {
 export function ErrorState({ message, onRetry }: { message?: string; onRetry?: () => void }) {
   const { t } = useI18n()
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-destructive/30 p-8 text-center">
-      <TriangleAlertIcon className="size-8 text-destructive" />
+    <div className="tone-danger flex flex-col items-center justify-center gap-2 rounded-2xl border p-8 text-center">
+      <TriangleAlertIcon className="size-8" />
       <p className="font-medium">{t.app.error}</p>
       {message && <p className="max-w-sm text-sm break-words text-muted-foreground">{message}</p>}
       {onRetry && (

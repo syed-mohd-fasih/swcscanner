@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { archiveAction, exportPreviewAction, type ExportPreview } from "@/app/actions/admin"
+import { Callout } from "@/components/shared/callout"
 import { DataTable, type Column } from "@/components/shared/data-table"
 import { DateInput, Field, useCarriers } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
@@ -125,7 +126,7 @@ export function ExportView() {
               {t.export.archive}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">{t.export.archiveHelp}</p>
+          <Callout tone="warning">{t.export.archiveHelp}</Callout>
         </CardContent>
       </Card>
       {loading ? (

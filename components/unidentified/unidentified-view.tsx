@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { mergeAction, searchExpectedAction, updateInvestigationAction } from "@/app/actions/admin"
 
-import { ItemStatus } from "@/components/items/status-badges"
+import { InvestigationBadge, ItemStatus } from "@/components/items/status-badges"
 import { LocationBadge } from "@/components/locations/location-selector"
 import { useSession } from "@/components/providers/session-provider"
 import { useLocationMap } from "@/components/providers/config-provider"
@@ -60,7 +60,7 @@ export function UnidentifiedView({ items }: { items: Item[] }) {
     {
       key: "investigation",
       header: t.fields.investigation,
-      cell: (i) => (i.investigation ? t.states.investigation[i.investigation.status] : "—"),
+      cell: (i) => (i.investigation ? <InvestigationBadge status={i.investigation.status} /> : "—"),
     },
   ]
 
@@ -174,7 +174,7 @@ function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () =>
           {t.app.open}
         </Button>
 
-        <section className="flex flex-col gap-3 rounded-2xl border p-3">
+        <section className="surface flex flex-col gap-3 p-3">
           <h3 className="font-medium">{t.unidentified.setStatus}</h3>
           <Field label={t.fields.status}>
             <Select value={status} onValueChange={(v) => setStatus(v as InvestigationStatus)}>
@@ -196,7 +196,7 @@ function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () =>
           <Button onClick={() => void saveInvestigation()}>{t.app.save}</Button>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-2xl border p-3">
+        <section className="surface flex flex-col gap-3 p-3">
           <h3 className="font-medium">{t.unidentified.merge}</h3>
           <p className="text-sm text-muted-foreground">{t.unidentified.mergeHelp}</p>
           <SearchBar value={mergeQuery} onChange={setMergeQuery} />

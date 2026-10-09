@@ -66,7 +66,7 @@ export function SessionPicker({
             <Button
               key={c.carrierCode}
               variant={initial?.carrierCode === c.carrierCode ? "default" : "outline"}
-              className="h-20 flex-col gap-1 rounded-2xl text-base"
+              className="h-20 flex-col gap-1 rounded-2xl text-base shadow-sm transition-transform active:scale-[0.97]"
               disabled={!date}
               onClick={() => onStart({ carrierCode: c.carrierCode, date })}
             >

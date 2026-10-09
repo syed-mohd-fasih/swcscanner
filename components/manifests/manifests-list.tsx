@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
 
+import { Callout } from "@/components/shared/callout"
 import { useCarriers } from "@/components/providers/config-provider"
 import { PageHeader } from "@/components/shared/page-header"
 import { ALL, FilterBar, SearchBar } from "@/components/shared/search-filter"
@@ -12,6 +13,7 @@ import { EmptyState, Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import type { Manifest } from "@/domain/manifests/types"
 import { useI18n } from "@/lib/i18n/client"
+import { cn } from "@/lib/utils"
 
 export type ManifestRow = { manifest: Manifest; received: number; total: number }
 
@@ -88,14 +90,20 @@ export function ManifestsList({
               <li key={m.manifestId}>
                 <Link
                   href={`/manifests/${m.manifestId}`}
-                  className="flex items-center gap-3 rounded-2xl border p-3 transition-colors hover:bg-muted/50"
+                  className="surface-interactive flex items-center gap-3 p-3"
                 >
                   <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <Ltr className="truncate font-semibold">{m.manifestName}</Ltr>
                     <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-                      <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                      <span
+                        className={cn(
+                          "block h-full rounded-full transition-[width] duration-700 ease-out",
+                          pct >= 100 ? "bg-success" : "bg-primary"
+                        )}
+                        style={{ width: `${pct}%` }}
+                      />
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className={cn("text-xs", pct >= 100 ? "font-medium text-success-ink" : "text-muted-foreground")}>
                       {t.manifests.received}: <Ltr className="tabular-nums">{received}/{total}</Ltr>
                     </span>
                   </span>
@@ -106,7 +114,7 @@ export function ManifestsList({
           })}
         </ul>
       )}
-      {hasMore && <p className="text-center text-sm text-muted-foreground">{t.manifests.narrowSearch}</p>}
+      {hasMore && <Callout tone="info">{t.manifests.narrowSearch}</Callout>}
     </div>
   )
 }

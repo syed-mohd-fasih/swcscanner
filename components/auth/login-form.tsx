@@ -4,6 +4,7 @@ import { LanguagesIcon } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 
+import { Callout } from "@/components/shared/callout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -88,7 +89,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <Callout tone="danger">{error}</Callout>}
           <Button type="submit" size="lg" className="h-11" disabled={busy}>
             {busy ? t.app.loading : t.auth.submit}
           </Button>

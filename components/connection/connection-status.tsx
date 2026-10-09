@@ -28,19 +28,19 @@ export function ConnectionStatus() {
       <PopoverTrigger asChild>
         <button type="button" className="flex items-center gap-1.5">
           {!online && (
-            <Badge variant="destructive" className="gap-1">
+            <Badge variant="danger" className="h-7 gap-1 px-2.5 animate-attention">
               <CloudOffIcon className="size-3" />
               {t.sync.offline}
             </Badge>
           )}
           {refused.length > 0 ? (
-            <Badge variant="destructive" className="gap-1">
+            <Badge variant="danger" className="h-7 gap-1 px-2.5 animate-in zoom-in-90 fade-in-0">
               <TriangleAlertIcon className="size-3" />
               {fmt(t.sync.failed, { n: refused.length })}
             </Badge>
           ) : (
             waiting > 0 && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="info" className="h-7 gap-1 px-2.5 animate-in zoom-in-90 fade-in-0">
                 <LoaderIcon className="size-3 animate-spin" />
                 {fmt(t.sync.pending, { n: waiting })}
               </Badge>
@@ -62,7 +62,7 @@ export function ConnectionStatus() {
                   </span>
                   {op.error ? (
                     <>
-                      <span className="text-destructive">{errorText(t, op.error)}</span>
+                      <span className="text-destructive-ink">{errorText(t, op.error)}</span>
                       <span className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => retryOp(op.opId)}>
                           {t.sync.retryFailed}
@@ -73,7 +73,7 @@ export function ConnectionStatus() {
                       </span>
                     </>
                   ) : (
-                    <span className="text-muted-foreground">{t.sync.waiting}</span>
+                    <span className="text-info-ink">{t.sync.waiting}</span>
                   )}
                 </li>
               ))}

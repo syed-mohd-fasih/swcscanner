@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef, useState } from "react"
 
+import { Callout } from "@/components/shared/callout"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,7 +67,9 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           </AlertDialogHeader>
           {options?.details && <div className="text-sm">{options.details}</div>}
           {options?.irreversible && (
-            <p className="text-sm font-semibold text-destructive">{t.confirm.irreversible}</p>
+            <Callout tone="danger" className="font-semibold">
+              {t.confirm.irreversible}
+            </Callout>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => settle(false)}>{t.app.cancel}</AlertDialogCancel>

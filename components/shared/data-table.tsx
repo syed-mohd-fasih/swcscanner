@@ -57,8 +57,9 @@ export function DataTable<T>({
             <li
               key={key}
               className={cn(
-                "flex gap-3 rounded-2xl border bg-card p-3",
-                onRowClick && "cursor-pointer active:bg-muted"
+                "flex gap-3 p-3",
+                onRowClick ? "surface-interactive cursor-pointer" : "surface",
+                selection?.selected.has(key) && "ring-2 ring-primary/40"
               )}
               onClick={() => onRowClick?.(row)}
             >
@@ -87,7 +88,7 @@ export function DataTable<T>({
       </ul>
 
       {/* tablets / desktop */}
-      <div className="hidden rounded-2xl border md:block">
+      <div className="surface hidden overflow-hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
