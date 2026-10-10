@@ -3,6 +3,12 @@
 ## Unreleased
 
 - **Locations:** admins add one rack at a time (any letter, then a continuous number range). Operators choose a location on three wheels (warehouse, rack, position).
+- **Export is now an Excel workbook of whole manifests.**
+  - It covers every piece, whatever its status, plus optional unidentified pieces.
+  - The workbook has a bilingual summary sheet with live counts, and one sheet per manifest with dropdowns and status colours.
+  - After the download, the app offers to delete the exported data; pieces changed in the meantime are kept.
+  - This replaces the date-range CSV/JSON export and "archive final pieces".
+- **Manifests:** edit the name, truck, date and notes; delete a manifest permanently, or export it to one sheet and then delete it.
 - **Usage meter switched off.** Cloud Monitoring needs billing (Blaze), and this project stays on Spark. The code is commented out (`USAGE METER (disabled)`); check usage in the Firebase console instead.
 
 ## 0.2.0: server-first

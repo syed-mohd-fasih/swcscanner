@@ -69,6 +69,10 @@ A piece that was received but not stored yet can't be release-scanned. Store it 
 - Search by the start of the name (e.g. `TNT-10-8`).
 - *New manifest*: type the lines or import a CSV. The name is generated as `<Carrier>-<M-D-Y>-<Truck>`, and you can edit it.
 - On a manifest, pieces that were never received can be deleted.
+- **Edit** a manifest's name, truck, date and notes. The carrier can't be changed: each piece keeps its own carrier, and scans look pieces up by it.
+- **Delete** a manifest with all its pieces, whatever their status. The dialog shows how many are still in the warehouse. Two choices:
+  - **Delete permanently**;
+  - **Export & delete**: you get a one-sheet Excel file of the manifest first, then confirm the delete.
 
 **Items**
 - Open any piece to see its separate states (received, stored, released) and times.
@@ -80,8 +84,16 @@ A piece that was received but not stored yet can't be release-scanned. Store it 
 - **Users:** create accounts, reset passwords, change roles, disable users.
 
 **Export**
-- Choose a date range, preview, then download CSV or JSON.
-- After the file is safely stored, released, repossessed or seized pieces can be archived (deleted from the system) to keep storage small.
+- Tick manifests (search by name), and optionally *Unidentified pieces (no manifest)*. Then *Download Excel file*. At most 5,000 pieces per export.
+- **The file:**
+  - **First sheet, "Export"** (English and Arabic): when and by whom it was exported, then one row per manifest. Each row has a link to the manifest's sheet, its piece count, counts per status and "% done", plus a totals row.
+  - **One sheet per manifest:** its details, a small summary, then every piece in a filterable table with a frozen header. Item data and column names are in English.
+- **Working in the file:**
+  - Status and location cells have dropdowns and the app's colours. There's an empty *Notes* column for hand edits.
+  - All counts are formulas, so changing a status by hand (or adding rows) updates the sheet summary and the "Export" sheet.
+- **After the download** the app asks whether to delete the exported data from the system. It's permanent.
+  - A piece that changed after the export (for example, stored by an operator in the meantime) is kept, and you're told to export again.
+  - A manifest is removed once none of its pieces are left.
 
 **System**
 - Shows which backend the app uses and this phone's waiting scans. For free-plan usage, see [Free-plan budget](free-plan-budget.md).

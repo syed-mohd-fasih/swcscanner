@@ -8,14 +8,14 @@ import { INVESTIGATION_STATUSES, RELEASE_OUTCOMES, type Item } from "@/domain/it
 import type { WarehouseLocation } from "@/domain/locations/types"
 import type { Manifest } from "@/domain/manifests/types"
 import { ok, type Result } from "@/domain/shared/result"
-import { toExportRows, type ExportRow } from "@/services/export"
-import { CONFIG_TAGS, getLocations } from "@/server/data/config"
-import { receivedBetween, searchExpected } from "@/server/data/items"
-import { getManifests, MANIFESTS_TAG } from "@/server/data/manifests"
+import pkg from "@/package.json"
+import { CONFIG_TAGS } from "@/server/data/config"
+import { searchExpected } from "@/server/data/items"
+import { MANIFESTS_TAG } from "@/server/data/manifests"
 import { guarded, zDate, zId, zOpId, zText } from "@/server/guard"
 import * as config from "@/server/services/config"
-import { archiveExported } from "@/server/services/export"
-import { correctItem, createManifest, deleteExpectedPieces } from "@/server/services/manifests"
+import { deleteExported, deleteManifest, exportWorkbook, MAX_EXPORT_PIECES, type DeleteReport, type ExportFile } from "@/server/services/export"
+import { correctItem, createManifest, deleteExpectedPieces, updateManifest } from "@/server/services/manifests"
 import { assignReleaseOutcome } from "@/server/services/release"
 import { mergeIntoExpected, updateInvestigation } from "@/server/services/unidentified"
 
@@ -147,31 +147,55 @@ export async function saveCarrierAction(input: unknown): Promise<Result<Carrier>
   })
 }
 
-// ── export / archive ──────────────────────────────────────────────────────
+// ── manifest edit / delete ─────────────────────────────────────────────────
 
-export type ExportPreview = {
-  rows: ExportRow[]
-  /** per row: id, carrier and release state (for client-side filters and archive) */
-  meta: { internalItemId: string; carrierCode: string; releaseState: Item["releaseState"] }[]
-  truncated: boolean
-}
-
-/** Pieces received in a date range. Cost: one read per piece (+ manifests). */
-export async function exportPreviewAction(input: unknown): Promise<Result<ExportPreview>> {
-  return guarded("ADMIN", z.object({ from: zDate, to: zDate }), input, async (d) => {
-    const { rows: items, hasMore } = await receivedBetween(d.from, d.to)
-    const manifests = await getManifests(items.map((i) => i.manifestId).filter((m): m is string => !!m))
-    const locations = new Map((await getLocations()).map((l) => [l.locationId, l]))
-    return ok({
-      rows: toExportRows(items, manifests, locations),
-      meta: items.map((i) => ({ internalItemId: i.internalItemId, carrierCode: i.carrierCode, releaseState: i.releaseState })),
-      truncated: hasMore,
-    })
+export async function updateManifestAction(input: unknown): Promise<Result<Manifest>> {
+  const schema = z.object({
+    manifestId: zId,
+    manifestName: zName,
+    truckId: z.string().trim().min(1).max(40),
+    date: zDate,
+    notes: zText,
+  })
+  return guarded("ADMIN", schema, input, async ({ manifestId, ...edit }) => {
+    const r = await updateManifest(manifestId, edit)
+    if (r.ok) revalidateTag(MANIFESTS_TAG, { expire: 0 })
+    return r
   })
 }
 
-export async function archiveAction(input: unknown): Promise<Result<number>> {
-  return guarded("ADMIN", z.object({ internalItemIds: z.array(zId).min(1).max(5000) }), input, (d) =>
-    archiveExported(d.internalItemIds)
+/** Permanent: the manifest and every piece under it, whatever their status. */
+export async function deleteManifestAction(input: unknown): Promise<Result<{ deletedPieces: number }>> {
+  return guarded("ADMIN", z.object({ manifestId: zId }), input, async (d) => {
+    const r = await deleteManifest(d.manifestId)
+    revalidateTag(MANIFESTS_TAG, { expire: 0 })
+    return r.ok ? ok({ deletedPieces: r.value.deletedPieces }) : r
+  })
+}
+
+// ── export (.xlsx) and delete after export ────────────────────────────────
+
+const zSelection = z.object({
+  manifestIds: z.array(zId).max(200),
+  includeUnidentified: z.boolean(),
+})
+
+/** Build the workbook on the server; the phone only saves the file. */
+export async function exportManifestsAction(input: unknown): Promise<Result<ExportFile>> {
+  const schema = zSelection.extend({ single: z.boolean().optional() })
+  return guarded("ADMIN", schema, input, (d, user) =>
+    exportWorkbook(d, { exportedBy: user.name || user.username, appVersion: pkg.version, single: d.single })
   )
+}
+
+/** After the admin has the file: delete exactly what it contained. */
+export async function deleteExportedAction(input: unknown): Promise<Result<DeleteReport>> {
+  const schema = zSelection.extend({
+    snapshot: z.array(z.object({ id: zId, version: z.number().int().nonnegative() })).max(MAX_EXPORT_PIECES),
+  })
+  return guarded("ADMIN", schema, input, async ({ snapshot, ...selection }) => {
+    const r = await deleteExported(selection, snapshot)
+    revalidateTag(MANIFESTS_TAG, { expire: 0 })
+    return r
+  })
 }

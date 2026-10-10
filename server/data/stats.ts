@@ -2,6 +2,7 @@ import "server-only"
 
 import { unstable_cache } from "next/cache"
 
+import type { Manifest } from "@/domain/manifests/types"
 import type { BusinessDate } from "@/domain/shared/dates"
 import { col, countOf } from "@/server/db"
 
@@ -78,4 +79,22 @@ export const getManifestPieceCount = unstable_cache(
   async (manifestId: string): Promise<number> => countOf(col.items().where("manifestId", "==", manifestId)),
   ["manifest-piece-count"],
   { revalidate: 10 * MINUTE, tags: ["stats"] }
+)
+
+/** Manifest rows with received / total counts (manifest list, export picker). */
+export async function withProgress(manifests: Manifest[]): Promise<{ manifest: Manifest; received: number; total: number }[]> {
+  return Promise.all(
+    manifests.map(async (m) => ({
+      manifest: m,
+      received: await getManifestReceived(m.manifestId),
+      total: m.pieceCount ?? (await getManifestPieceCount(m.manifestId)),
+    }))
+  )
+}
+
+/** Pieces that never matched a manifest (the export's "Unidentified" sheet). */
+export const getNoManifestCount = unstable_cache(
+  async (): Promise<number> => countOf(col.items().where("manifestId", "==", null)),
+  ["no-manifest-count"],
+  { revalidate: MINUTE, tags: ["stats"] }
 )

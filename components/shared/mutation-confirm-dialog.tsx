@@ -22,6 +22,8 @@ export type ConfirmOptions = {
   /** extra read-only details (what will change, the date, counts…) */
   details?: React.ReactNode
   confirmLabel?: string
+  /** defaults to "Cancel" */
+  cancelLabel?: string
   destructive?: boolean
   /** shows the red "This action is irreversible." warning */
   irreversible?: boolean
@@ -72,7 +74,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             </Callout>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => settle(false)}>{t.app.cancel}</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => settle(false)}>{options?.cancelLabel ?? t.app.cancel}</AlertDialogCancel>
             <AlertDialogAction
               variant={options?.destructive || options?.irreversible ? "destructive" : "default"}
               onClick={() => settle(true)}

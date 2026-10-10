@@ -5,7 +5,6 @@ import { FieldPath } from "firebase-admin/firestore"
 import type { Item, ReleaseState } from "@/domain/items/types"
 import { isAwaitingStorage } from "@/domain/receiving/rules"
 import { isReleaseEligible } from "@/domain/release/rules"
-import type { BusinessDate } from "@/domain/shared/dates"
 import { chunk, col, docData, PREFIX_END, queryAll } from "@/server/db"
 
 /**
@@ -88,9 +87,10 @@ export async function searchExpected(carrierCode: string, prefix: string, limit 
   return queryAll<Item>(q.orderBy("itemId").orderBy(FieldPath.documentId()).limit(limit))
 }
 
-/** Export: pieces received within a date range (inclusive). */
-export async function receivedBetween(from: BusinessDate, to: BusinessDate, limit = 5000): Promise<Page<Item>> {
-  return page<Item>(col.items().where("dateOfReceival", ">=", from).where("dateOfReceival", "<=", to), limit)
+/** Export: pieces that never matched a manifest (unidentified ones), bounded. */
+export async function itemsWithoutManifest(limit: number): Promise<Item[]> {
+  const rows = await queryAll<Item>(col.items().where("manifestId", "==", null).limit(limit))
+  return rows.sort((a, b) => a.itemId.localeCompare(b.itemId) || a.pieceNumber - b.pieceNumber)
 }
 
 function byReceivedAt(a: Item, b: Item): number {

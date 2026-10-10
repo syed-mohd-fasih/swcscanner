@@ -36,7 +36,10 @@ Screens add a little on top:
 3. **Exact lookups** (`carrier + item ID`) and **bounded lists.** No live listeners, no polling.
 4. **Shared caches** for carriers, locations and manifest headers, cleared only when an admin changes them.
 5. **Barcodes are parsed on the phone first.** Frames that only show non-item barcodes (such as DHL's routing code) never reach the server.
-6. **Archive after export** keeps stored data far below 1 GiB, at about 3 KB per piece including indexes.
+6. **Delete after export** keeps stored data far below 1 GiB, at about 3 KB per piece including indexes. Costs:
+   - exporting is 1 read per piece and per manifest;
+   - deleting is 1 read and 1 delete per piece, plus 1 per manifest;
+   - each export is capped at 5,000 pieces, so one export and delete uses at most a quarter of the 20,000 daily deletes.
 
 ## Checking usage
 

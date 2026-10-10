@@ -1,144 +1,164 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { toast } from "sonner"
+import { FileSpreadsheetIcon, HelpCircleIcon } from "lucide-react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 
-import { archiveAction, exportPreviewAction, type ExportPreview } from "@/app/actions/admin"
+import { useExportFlow } from "@/components/export/use-export-flow"
+import type { ManifestRow } from "@/components/manifests/manifests-list"
 import { Callout } from "@/components/shared/callout"
-import { DataTable, type Column } from "@/components/shared/data-table"
-import { DateInput, Field, useCarriers } from "@/components/shared/fields"
-import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
-import { ALL, FilterBar } from "@/components/shared/search-filter"
-import { LoadingState } from "@/components/shared/states"
+import { SearchBar } from "@/components/shared/search-filter"
+import { EmptyState, Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RELEASE_STATES } from "@/domain/items/types"
-import { todayBusinessDate } from "@/domain/shared/dates"
+import { Checkbox } from "@/components/ui/checkbox"
 import { fmt, useI18n } from "@/lib/i18n/client"
-import { callAction } from "@/lib/submit-op"
-import { download, EXPORT_FORMATS, type ExportRow } from "@/services/export"
+import { cn } from "@/lib/utils"
 
-const PREVIEW_ROWS = 50
+/** keep in step with MAX_EXPORT_PIECES on the server */
+const MAX_PIECES = 5000
 
-/** Filters → preview → download; optional archive (delete) after export. */
-export function ExportView() {
+/**
+ * Pick manifests (and unidentified pieces) → one .xlsx → offer to delete
+ * what was exported. The selection survives searching.
+ */
+export function ExportView({
+  rows,
+  hasMore,
+  query,
+  unidentified,
+}: {
+  rows: ManifestRow[]
+  hasMore: boolean
+  query: string
+  unidentified: number
+}) {
   const { t } = useI18n()
-  const confirm = useConfirm()
-  const carriers = useCarriers(false).data ?? []
-  const firstOfMonth = todayBusinessDate().slice(0, 8) + "01"
-  const [from, setFrom] = useState(firstOfMonth)
-  const [to, setTo] = useState(todayBusinessDate())
-  const [carrier, setCarrier] = useState(ALL)
-  const [release, setRelease] = useState(ALL)
-  const [formatId, setFormatId] = useState(EXPORT_FORMATS[0].id)
-  const [data, setData] = useState<ExportPreview | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [exported, setExported] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const run = useExportFlow()
+  const [text, setText] = useState(query)
+  /** manifestId → piece count */
+  const [picked, setPicked] = useState<Map<string, number>>(new Map())
+  const [withUnidentified, setWithUnidentified] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  // carrier / release filters apply to the fetched range on the device
-  const kept = useMemo(() => {
-    if (!data) return []
-    return data.meta.flatMap((m, i) =>
-      (carrier === ALL || m.carrierCode === carrier) && (release === ALL || m.releaseState === release) ? [i] : []
-    )
-  }, [data, carrier, release])
-  const rows = useMemo(() => kept.map((i) => data!.rows[i]), [kept, data])
+  // debounce typing; the server searches (indexed name prefix)
+  useEffect(() => {
+    if (text === query) return
+    const timer = setTimeout(() => {
+      const next = new URLSearchParams(params)
+      if (text.trim()) next.set("q", text.trim())
+      else next.delete("q")
+      router.replace(`${pathname}?${next}`)
+    }, 400)
+    return () => clearTimeout(timer)
+  })
 
-  async function preview() {
-    setLoading(true)
-    setExported(false)
-    const fetched = await callAction(t, () => exportPreviewAction({ from, to }))
-    setLoading(false)
-    if (fetched) setData(fetched)
-    if (fetched?.truncated) toast.warning(t.export.truncated)
+  const toggle = (id: string, total: number, on: boolean) =>
+    setPicked((p) => {
+      const next = new Map(p)
+      if (on) next.set(id, total)
+      else next.delete(id)
+      return next
+    })
+
+  const sheets = picked.size + (withUnidentified ? 1 : 0)
+  const pieces = [...picked.values()].reduce((a, b) => a + b, 0) + (withUnidentified ? unidentified : 0)
+  const tooMany = pieces > MAX_PIECES
+  const allShown = rows.length > 0 && rows.every((r) => picked.has(r.manifest.manifestId))
+
+  async function exportNow() {
+    setBusy(true)
+    const outcome = await run({ manifestIds: [...picked.keys()], includeUnidentified: withUnidentified })
+    setBusy(false)
+    if (outcome === "deleted") {
+      setPicked(new Map())
+      setWithUnidentified(false)
+      router.refresh()
+    }
   }
-
-  async function doExport() {
-    const format = EXPORT_FORMATS.find((f) => f.id === formatId)!
-    if (!(await confirm({ description: fmt(t.export.confirmExport, { n: rows.length }) }))) return
-    download(format, rows, `swc-export-${from}_${to}`)
-    setExported(true)
-  }
-
-  async function doArchive() {
-    if (!data) return
-    const ids = kept.map((i) => data.meta[i].internalItemId)
-    const ok = await confirm({ description: fmt(t.export.confirmArchive, { n: ids.length }), irreversible: true })
-    if (!ok) return
-    const archived = await callAction(t, () => archiveAction({ internalItemIds: ids }))
-    if (archived === null) return
-    setData(null)
-  }
-
-  const columns = useMemo<Column<ExportRow>[]>(
-    () =>
-      ["itemId", "piece", "carrier", "manifestName", "releaseState", "dateOfReceival", "dateOfRelease"].map((key) => ({
-        key,
-        header: key,
-        cell: (r) => <span dir="ltr">{r[key] === null ? "—" : String(r[key])}</span>,
-      })),
-    []
-  )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-24">
       <PageHeader title={t.export.title} description={t.export.help} />
-      <Card>
-        <CardContent className="flex flex-col gap-3 pt-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Field label={`${t.fields.dateOfReceival} — ${t.export.from}`} htmlFor="e-from">
-              <DateInput id="e-from" value={from} onChange={setFrom} />
-            </Field>
-            <Field label={t.export.to} htmlFor="e-to">
-              <DateInput id="e-to" value={to} onChange={setTo} />
-            </Field>
-            <Field label={t.export.format}>
-              <Select value={formatId} onValueChange={setFormatId}>
-                <SelectTrigger className="h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPORT_FORMATS.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      {f.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <FilterBar
-            filters={[
-              { key: "carrier", label: t.fields.carrier, value: carrier, onChange: setCarrier, options: carriers.map((c) => ({ value: c.carrierCode, label: c.name })) },
-              { key: "release", label: t.release.title, value: release, onChange: setRelease, options: RELEASE_STATES.map((s) => ({ value: s, label: t.states.release[s] })) },
-            ]}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void preview()} disabled={loading || !from || !to}>
-              {t.export.preview}
-            </Button>
-            <Button onClick={() => void doExport()} disabled={rows.length === 0}>
-              {t.export.download}
-            </Button>
-            <Button variant="destructive" onClick={() => void doArchive()} disabled={!exported || rows.length === 0}>
-              {t.export.archive}
-            </Button>
-          </div>
-          <Callout tone="warning">{t.export.archiveHelp}</Callout>
-        </CardContent>
-      </Card>
-      {loading ? (
-        <LoadingState />
-      ) : (
-        data && (
-          <>
-            <p className="text-sm text-muted-foreground">{fmt(t.export.rows, { n: rows.length })}</p>
-            <DataTable columns={columns} rows={rows.slice(0, PREVIEW_ROWS)} rowKey={(r) => String(r.internalItemId)} />
-          </>
-        )
+
+      {unidentified > 0 && (
+        <label className={cn("surface flex cursor-pointer items-center gap-3 p-3 transition-shadow", withUnidentified && "ring-2 ring-primary/40")}>
+          <Checkbox checked={withUnidentified} onCheckedChange={(c) => setWithUnidentified(c === true)} />
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/20 text-warning-ink">
+            <HelpCircleIcon className="size-5" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="font-semibold">{t.export.unidentified}</span>
+            <span className="text-xs text-muted-foreground">{fmt(t.export.unidentifiedHelp, { n: unidentified })}</span>
+          </span>
+        </label>
       )}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <SearchBar value={text} onChange={setText} />
+        {rows.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => rows.forEach((r) => toggle(r.manifest.manifestId, r.total, !allShown))}
+          >
+            {t.export.selectAll}
+          </Button>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map(({ manifest: m, received, total }) => {
+            const on = picked.has(m.manifestId)
+            return (
+              <li key={m.manifestId}>
+                <label className={cn("surface-interactive flex cursor-pointer items-center gap-3 p-3", on && "ring-2 ring-primary/40")}>
+                  <Checkbox checked={on} onCheckedChange={(c) => toggle(m.manifestId, total, c === true)} />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <Ltr className="truncate text-start font-semibold">{m.manifestName}</Ltr>
+                    <span className="text-xs text-muted-foreground">
+                      <Ltr>
+                        {m.carrierCode} · {m.date}
+                      </Ltr>
+                      {" · "}
+                      {t.manifests.received}: <Ltr className="tabular-nums">{received}/{total}</Ltr>
+                    </span>
+                  </span>
+                </label>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {hasMore && <Callout tone="info">{t.manifests.narrowSearch}</Callout>}
+
+      {/* sticky action bar, above the phone bottom tabs */}
+      <div
+        aria-hidden={sheets === 0}
+        inert={sheets === 0}
+        className={cn(
+          "fixed inset-x-0 bottom-16 z-20 border-t bg-card/95 px-3 py-3 shadow-[0_-4px_16px_-6px] shadow-foreground/15 backdrop-blur transition-all duration-300 ease-out md:bottom-0 md:ps-[calc(var(--sidebar-width)+0.75rem)]",
+          sheets === 0 && "pointer-events-none translate-y-full opacity-0"
+        )}
+      >
+        <div className="mx-auto flex max-w-6xl flex-col gap-2">
+          {tooMany && <Callout tone="warning">{fmt(t.export.tooMany, { n: MAX_PIECES.toLocaleString("en-US") })}</Callout>}
+          <div className="flex items-center justify-between gap-3">
+            <span key={sheets} className="text-sm font-semibold text-primary-ink animate-in zoom-in-95 fade-in-0">
+              {fmt(t.export.selected, { n: sheets, p: pieces })}
+            </span>
+            <Button size="lg" className="h-12" disabled={busy || tooMany || sheets === 0} onClick={() => void exportNow()}>
+              <FileSpreadsheetIcon />
+              {busy ? t.export.preparing : t.export.download}
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

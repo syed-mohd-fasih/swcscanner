@@ -7,6 +7,7 @@ import { deleteExpectedAction } from "@/app/actions/admin"
 
 import { ItemStatus } from "@/components/items/status-badges"
 import { LocationBadge } from "@/components/locations/location-selector"
+import { ManifestActions } from "@/components/manifests/manifest-actions"
 import { ManifestProgress } from "@/components/manifests/manifest-progress"
 import { useLocationMap } from "@/components/providers/config-provider"
 import { DataTable, toggleInSet, type Column } from "@/components/shared/data-table"
@@ -73,7 +74,7 @@ export function ManifestDetail({ manifest, items }: { manifest: Manifest | null;
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title={m.manifestName} />
+      <PageHeader title={m.manifestName} actions={<ManifestActions manifest={m} items={items} />} />
       <div className="grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <Card>
           <CardHeader>

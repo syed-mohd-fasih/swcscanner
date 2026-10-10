@@ -74,3 +74,18 @@ export function summarizeManifest(items: Item[]): ManifestSummary {
   }
   return s
 }
+
+/** For "delete these pieces?" questions: what is still physically here. */
+export type PieceCounts = { notReceived: number; inWarehouse: number; done: number }
+
+const FINAL_RELEASE = new Set<Item["releaseState"]>(["released", "repossessed", "seized"])
+
+export function pieceCounts(items: Item[]): PieceCounts {
+  const counts = { notReceived: 0, inWarehouse: 0, done: 0 }
+  for (const i of items) {
+    if (FINAL_RELEASE.has(i.releaseState)) counts.done++
+    else if (i.receivingState === "expected") counts.notReceived++
+    else counts.inWarehouse++
+  }
+  return counts
+}

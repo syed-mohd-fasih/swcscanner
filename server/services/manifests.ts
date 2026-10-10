@@ -101,13 +101,27 @@ export async function deleteExpectedPieces(internalItemIds: string[]): Promise<R
   })
 }
 
-export async function updateManifestNotes(manifestId: string, notes: string | null): Promise<Result<Manifest>> {
+export type ManifestEdit = Pick<Manifest, "manifestName" | "truckId" | "date" | "notes">
+
+/**
+ * Admin: edit a manifest's details. The carrier is not editable: each piece
+ * keeps its own carrier, and scan lookups use it.
+ */
+export async function updateManifest(manifestId: string, edit: ManifestEdit): Promise<Result<Manifest>> {
   return adminDb().runTransaction(async (tx) => {
     const ref = col.manifests().doc(manifestId)
     const snap = await tx.get(ref)
     if (!snap.exists) return notFound("Manifest")
     const before = snap.data() as Manifest
-    const after: Manifest = { ...before, notes, updatedAt: new Date().toISOString(), version: before.version + 1 }
+    const after: Manifest = {
+      ...before,
+      manifestName: edit.manifestName.trim() || before.manifestName,
+      truckId: edit.truckId.trim(),
+      date: edit.date,
+      notes: edit.notes,
+      updatedAt: new Date().toISOString(),
+      version: before.version + 1,
+    }
     tx.set(ref, after)
     return ok(after)
   })
