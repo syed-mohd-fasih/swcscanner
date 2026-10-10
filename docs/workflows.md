@@ -79,7 +79,11 @@ A piece that was received but not stored yet can't be release-scanned. Store it 
 - Admins can correct the data or clear a mismatch flag.
 
 **Configuration**
-- **Locations:** add one rack at a time: warehouse (WH1), the rack's letter (any letter, e.g. K) and the first and last numbers on that rack (1–40), up to 500 per add. Locations can be disabled but are never deleted.
+- **Locations:** one card per warehouse, listing its racks and their number ranges (e.g. `A 1–10`, `K 1–40`). Rack letters need not follow the alphabet.
+  - **Add warehouse:** a code (WH1), then racks: a letter plus the first and last number on that rack.
+  - **Edit:** the same dialog with every rack and range filled in. Change the code, rename racks, change ranges, add or remove racks.
+  - **Delete** removes the warehouse.
+  - **Positions with pieces still stored there** aren't deleted when an edit removes them. They stay as *disabled* positions, so those pieces keep showing their location, and they're left out of the Store wheels. The card shows them, and they're cleaned up on a later save once empty. Before saving, the app warns how many there are.
 - **Carriers:** see [Carriers and barcodes](carriers-and-barcodes.md).
 - **Users:** create accounts, reset passwords, change roles, disable users.
 

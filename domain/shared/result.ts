@@ -15,6 +15,7 @@ export type DomainErrorCode =
   | "INVALID_INPUT"
   | "UNAUTHORIZED"
   | "EXPORT_TOO_LARGE"
+  | "WAREHOUSE_EXISTS"
 
 export type DomainError = {
   code: DomainErrorCode

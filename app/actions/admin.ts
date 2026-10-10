@@ -5,7 +5,6 @@ import { z } from "zod"
 
 import { PARSER_IDS, type Carrier } from "@/domain/carriers/types"
 import { INVESTIGATION_STATUSES, RELEASE_OUTCOMES, type Item } from "@/domain/items/types"
-import type { WarehouseLocation } from "@/domain/locations/types"
 import type { Manifest } from "@/domain/manifests/types"
 import { ok, type Result } from "@/domain/shared/result"
 import pkg from "@/package.json"
@@ -115,18 +114,25 @@ export async function searchExpectedAction(input: unknown): Promise<Result<Item[
 
 // ── configuration ─────────────────────────────────────────────────────────
 
-export async function addLocationsAction(input: unknown): Promise<Result<WarehouseLocation[]>> {
-  const spec = z.object({ warehouse: z.string().max(8), rack: z.string().max(2), position: z.string().max(4) })
-  return guarded("ADMIN", z.object({ specs: z.array(spec).min(1).max(2000) }), input, async (d) => {
-    const r = await config.addLocations(d.specs)
-    if (r.ok) revalidateTag(CONFIG_TAGS.locations, { expire: 0 })
-    return r
-  })
+const zWarehouseEdit = z.object({
+  original: z.string().trim().max(8).nullable(),
+  spec: z.object({
+    warehouse: z.string().trim().max(8),
+    racks: z
+      .array(z.object({ rack: z.string().trim().max(2), from: z.number().int(), to: z.number().int() }))
+      .max(100),
+  }),
+})
+
+/** Read-only: how a warehouse save would change locations. */
+export async function previewWarehouseAction(input: unknown): Promise<Result<config.WarehouseChange>> {
+  return guarded("ADMIN", zWarehouseEdit, input, (d) => config.previewWarehouse(d))
 }
 
-export async function setLocationActiveAction(input: unknown): Promise<Result<WarehouseLocation>> {
-  return guarded("ADMIN", z.object({ locationId: zId, active: z.boolean() }), input, async (d) => {
-    const r = await config.setLocationActive(d.locationId, d.active)
+/** Add, edit or delete (no racks) a warehouse. */
+export async function saveWarehouseAction(input: unknown): Promise<Result<config.WarehouseChange>> {
+  return guarded("ADMIN", zWarehouseEdit, input, async (d) => {
+    const r = await config.saveWarehouse(d)
     if (r.ok) revalidateTag(CONFIG_TAGS.locations, { expire: 0 })
     return r
   })

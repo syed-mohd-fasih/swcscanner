@@ -3,12 +3,14 @@ import "server-only"
 import { compileIdPattern } from "@/carriers"
 import type { Carrier, ParserId } from "@/domain/carriers/types"
 import {
-  locationIdFor,
-  POSITION_NUMBER,
-  RACK_LETTER,
-  WAREHOUSE_CODE,
-  type WarehouseLocation,
-} from "@/domain/locations/types"
+  MAX_CHANGES,
+  planWarehouse,
+  removedBy,
+  validateWarehouse,
+  type WarehousePlan,
+  type WarehouseSpec,
+} from "@/domain/locations/rules"
+import type { WarehouseLocation } from "@/domain/locations/types"
 import { nowIso } from "@/domain/shared/dates"
 import { err, ok, type Result } from "@/domain/shared/result"
 import { adminDb } from "@/lib/firebase/admin"
@@ -19,40 +21,85 @@ import { chunk, col, docData } from "@/server/db"
  * cache tags afterwards so every screen sees the change.
  */
 
-export async function addLocations(
-  specs: { warehouse: string; rack: string; position: string }[]
-): Promise<Result<WarehouseLocation[]>> {
-  const now = nowIso()
-  const parsed: WarehouseLocation[] = []
-  for (const s of specs) {
-    const warehouse = s.warehouse.trim().toUpperCase()
-    const rack = s.rack.trim().toUpperCase()
-    // the number printed on the rack, as it is (no padding)
-    const position = String(Number(s.position.trim()))
-    if (!WAREHOUSE_CODE.test(warehouse)) return err("LOCATION_INVALID", "Warehouse code: 1–8 letters or digits.")
-    if (!RACK_LETTER.test(rack)) return err("LOCATION_INVALID", "Rack must be a letter.")
-    if (!POSITION_NUMBER.test(position)) return err("LOCATION_INVALID", "Position must be a number.")
-    parsed.push({ locationId: locationIdFor(warehouse, rack, position), warehouse, rack, position, active: true, createdAt: now, updatedAt: now })
-  }
-  // fresh read (admin-only, rare) so existing locations are never overwritten
-  const existing = new Set((await col.locations().select().get()).docs.map((d) => d.id))
-  const created = [...new Map(parsed.filter((l) => !existing.has(l.locationId)).map((l) => [l.locationId, l])).values()]
-  for (const part of chunk(created, 450)) {
-    const batch = adminDb().batch()
-    for (const l of part) batch.create(col.locations().doc(l.locationId), l)
-    await batch.commit()
-  }
-  return ok(created)
+export type WarehouseEdit = {
+  /** the warehouse being edited; null when adding a new one */
+  original: string | null
+  spec: WarehouseSpec
+}
+export type WarehouseChange = { added: number; removed: number; keptDisabled: number }
+
+/** All locations of one warehouse, active or not (fresh read; admin-only, rare). */
+async function warehouseLocations(warehouse: string): Promise<WarehouseLocation[]> {
+  return (await col.locations().where("warehouse", "==", warehouse).get()).docs.map((d) => d.data() as WarehouseLocation)
 }
 
-/** Locations are never hard-deleted once used; they are deactivated. */
-export async function setLocationActive(locationId: string, active: boolean): Promise<Result<WarehouseLocation>> {
-  const ref = col.locations().doc(locationId)
-  const before = docData<WarehouseLocation>(await ref.get())
-  if (!before) return err("LOCATION_INVALID", "Location not found.")
-  const after = { ...before, active, updatedAt: nowIso() }
-  await ref.set(after)
-  return ok(after)
+/** Which of these locations pieces still point to (one read per such piece). */
+async function occupiedOf(locationIds: string[]): Promise<Set<string>> {
+  const occupied = new Set<string>()
+  for (const part of chunk(locationIds, 30)) {
+    const snap = await col.items().where("locationId", "in", part).select("locationId").get()
+    for (const d of snap.docs) occupied.add(d.get("locationId") as string)
+  }
+  return occupied
+}
+
+async function planEdit(edit: WarehouseEdit): Promise<Result<{ plan: WarehousePlan; spec: WarehouseSpec }>> {
+  const valid = validateWarehouse(edit.spec)
+  if (!valid.ok) return valid
+  const spec = valid.value
+  const original = edit.original?.trim().toUpperCase() || null
+  if (spec.warehouse !== original) {
+    const taken = await col.locations().where("warehouse", "==", spec.warehouse).limit(1).select().get()
+    if (!taken.empty) return err("WAREHOUSE_EXISTS", `Warehouse ${spec.warehouse} already exists.`)
+  }
+  const existing = original ? await warehouseLocations(original) : []
+  if (original && existing.length === 0) return err("NOT_FOUND", "Warehouse not found. It may have been changed.")
+  const occupied = await occupiedOf(removedBy(existing, spec))
+  const plan = planWarehouse(existing, spec, occupied)
+  if (plan.enable.length + plan.disable.length + plan.remove.length > MAX_CHANGES) {
+    return err("INVALID_INPUT", `Too many changes at once (max ${MAX_CHANGES}).`)
+  }
+  return ok({ plan, spec })
+}
+
+const summary = (plan: WarehousePlan): WarehouseChange => ({
+  added: plan.enable.length,
+  removed: plan.remove.length,
+  keptDisabled: plan.disable.length,
+})
+
+/** Read-only: what a save would do (for the warning before saving). */
+export async function previewWarehouse(edit: WarehouseEdit): Promise<Result<WarehouseChange>> {
+  const r = await planEdit(edit)
+  return r.ok ? ok(summary(r.value.plan)) : r
+}
+
+/**
+ * Add, edit (ranges, rack letters, the warehouse code) or delete (no racks)
+ * a warehouse. New positions are created; removed empty ones are deleted;
+ * removed ones that still hold pieces are kept but disabled, so those pieces
+ * keep their location and nothing new is stored there. Disabled positions
+ * that have emptied are deleted on a later save.
+ */
+export async function saveWarehouse(edit: WarehouseEdit): Promise<Result<WarehouseChange>> {
+  const r = await planEdit(edit)
+  if (!r.ok) return r
+  const { plan } = r.value
+  const now = nowIso()
+  type Write = (batch: FirebaseFirestore.WriteBatch) => void
+  const writes: Write[] = [
+    ...plan.enable.map<Write>((p) => (batch) =>
+      batch.set(col.locations().doc(p.locationId), { ...p, active: true, createdAt: now, updatedAt: now } satisfies WarehouseLocation)
+    ),
+    ...plan.disable.map<Write>((id) => (batch) => batch.update(col.locations().doc(id), { active: false, updatedAt: now })),
+    ...plan.remove.map<Write>((id) => (batch) => batch.delete(col.locations().doc(id))),
+  ]
+  for (const part of chunk(writes, 450)) {
+    const batch = adminDb().batch()
+    for (const write of part) write(batch)
+    await batch.commit()
+  }
+  return ok(summary(plan))
 }
 
 export async function saveCarrier(input: {

@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- **Locations:** admins add one rack at a time (any letter, then a continuous number range). Operators choose a location on three wheels (warehouse, rack, position).
+- **Locations:**
+  - warehouses are managed as a whole: add, edit (code, racks, ranges) and delete in one dialog;
+  - positions still holding pieces are kept as disabled instead of being deleted;
+  - per-position on/off switches are gone;
+  - operators choose a location on three wheels (warehouse, rack, position).
 - **Export is now an Excel workbook of whole manifests.**
   - It covers every piece, whatever its status, plus optional unidentified pieces.
   - The workbook has a bilingual summary sheet with live counts, and one sheet per manifest with dropdowns and status colours.
