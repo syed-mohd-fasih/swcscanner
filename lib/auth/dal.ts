@@ -16,23 +16,37 @@ export type SessionUser = {
 }
 
 /**
+ * Recently verified cookies, per server instance. The revocation check is a
+ * network call to Firebase Auth; repeating it on every scan would add latency.
+ * A disabled user is cut off within REVERIFY_MS.
+ */
+const REVERIFY_MS = 2 * 60 * 1000
+const verified = new Map<string, { user: SessionUser; until: number }>()
+
+/**
  * Server-side authorization boundary. Verifies the Firebase session cookie
  * (checking revocation, so disabled users are cut off) once per request.
  */
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const cookie = (await cookies()).get(SESSION_COOKIE)?.value
   if (!cookie) return null
+  const hit = verified.get(cookie)
+  if (hit && hit.until > Date.now()) return hit.user
   try {
     const claims = await adminAuth().verifySessionCookie(cookie, true)
     const role = claims.role as Role | undefined
     if (role !== "ADMIN" && role !== "OPERATOR") return null
-    return {
+    const user: SessionUser = {
       uid: claims.uid,
       name: (claims.name as string | undefined) ?? (claims.username as string),
       username: claims.username as string,
       role,
     }
+    if (verified.size > 500) verified.clear()
+    verified.set(cookie, { user, until: Date.now() + REVERIFY_MS })
+    return user
   } catch {
+    verified.delete(cookie)
     return null
   }
 })

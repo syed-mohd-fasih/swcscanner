@@ -1,19 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { toast } from "sonner"
 
-import { useSession } from "@/components/providers/session-provider"
 import { PieceSelector } from "@/components/receiving/pieces"
 import { ReceiptForm, receiptDraftComplete, toReceiptInput, type ReceiptDraft } from "@/components/receiving/receipt-form"
 import { Field } from "@/components/shared/fields"
-import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { LabelData } from "@/domain/items/types"
-import { fmt, useI18n } from "@/lib/i18n/client"
-import { recordUnidentifiedPiece } from "@/services/receiving"
+import type { ReceiptEntry } from "@/components/receiving/verification-dialog"
+import { useI18n } from "@/lib/i18n/client"
+import { submitOp } from "@/lib/submit-op"
 
 /**
  * Capture a piece that matches no expected item. The operator copies the
@@ -28,11 +26,9 @@ export function UnidentifiedForm({
   initial: Partial<LabelData> & { pieceNumber?: number | null; pieceTotal?: number | null }
   carrierCode: string
   sessionDate: string
-  onDone: () => void
+  onDone: (entry: ReceiptEntry) => void
 }) {
   const { t } = useI18n()
-  const { user } = useSession()
-  const confirm = useConfirm()
   const [label, setLabel] = useState({
     itemId: initial.itemId ?? "",
     shipper: initial.shipper ?? "",
@@ -51,31 +47,39 @@ export function UnidentifiedForm({
 
   async function submit() {
     if (!valid || !piece) return
-    const ok = await confirm({
-      description: fmt(t.receiving.confirmUnidentifiedText, { piece: `${piece}/${total}`, itemId: label.itemId }),
-    })
-    if (!ok) return
+    const itemId = label.itemId.trim()
     setBusy(true)
-    const result = await recordUnidentifiedPiece(
+    const outcome = await submitOp(
+      t,
+      "recordUnidentified",
       {
-        ...toReceiptInput(draft),
-        label: {
-          itemId: label.itemId,
-          carrierCode,
-          shipper: label.shipper.trim() || null,
-          consignee: label.consignee.trim() || null,
-          weight: label.weight ? Number(label.weight) : null,
-          description: label.description.trim() || null,
+        piece: {
+          ...toReceiptInput(draft),
+          label: {
+            itemId,
+            carrierCode,
+            shipper: label.shipper.trim() || null,
+            consignee: label.consignee.trim() || null,
+            weight: label.weight ? Number(label.weight) : null,
+            description: label.description.trim() || null,
+          },
+          pieceNumber: piece,
+          pieceTotal: total,
         },
-        pieceNumber: piece,
-        pieceTotal: total,
       },
-      user.uid
+      `${itemId} ${piece}/${total}`,
+      t.receiving.unidentifiedSaved
     )
     setBusy(false)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(t.receiving.unidentifiedSaved)
-    onDone()
+    if (outcome.status === "failed") return
+    onDone({
+      key: `unidentified:${carrierCode}:${itemId}#${piece}`,
+      itemId,
+      piece: `${piece}/${total}`,
+      kind: "unidentified",
+      queued: outcome.status === "queued",
+      wasExpected: false,
+    })
   }
 
   return (
@@ -125,9 +129,11 @@ export function UnidentifiedForm({
         />
       </Field>
       <ReceiptForm value={draft} onChange={setDraft} />
-      <Button size="lg" className="h-12" disabled={!valid || busy} onClick={() => void submit()}>
-        {t.receiving.recordUnidentified}
-      </Button>
+      <div className="sticky bottom-0 -mx-6 border-t bg-popover/95 px-6 py-3 backdrop-blur">
+        <Button size="lg" className="h-12 w-full" disabled={!valid || busy} onClick={() => void submit()}>
+          {t.receiving.recordUnidentified}
+        </Button>
+      </div>
     </div>
   )
 }

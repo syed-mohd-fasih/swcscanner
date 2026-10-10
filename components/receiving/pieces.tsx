@@ -1,5 +1,7 @@
 "use client"
 
+import { CheckIcon } from "lucide-react"
+
 import { Ltr } from "@/components/shared/states"
 import type { PieceProgress as Progress } from "@/domain/receiving/candidates"
 import { useI18n } from "@/lib/i18n/client"
@@ -12,7 +14,12 @@ export function PieceProgress({ progress }: { progress: Progress }) {
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2">
         <span className="text-sm text-muted-foreground">{t.receiving.found}</span>
-        <Ltr className="text-lg font-semibold tabular-nums">
+        <Ltr
+          className={cn(
+            "text-lg font-semibold tabular-nums",
+            progress.found.length === progress.total ? "text-success-ink" : progress.found.length > 0 && "text-info-ink"
+          )}
+        >
           {progress.found.length}/{progress.total}
         </Ltr>
       </div>
@@ -55,10 +62,10 @@ export function PieceSelector({
           aria-invalid={invalid}
           value={value ?? ""}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="h-12 w-28 rounded-xl border bg-transparent px-3 text-lg tabular-nums aria-invalid:border-destructive"
+          className="h-12 w-28 rounded-xl border bg-card px-3 text-lg tabular-nums aria-invalid:border-destructive"
         />
         <span className="text-lg tabular-nums">/ {total}</span>
-        {invalid && <span className="text-sm text-destructive">{t.receiving.alreadyConfirmed}</span>}
+        {invalid && <span className="text-sm text-destructive-ink">{t.receiving.alreadyConfirmed}</span>}
       </div>
     )
   }
@@ -78,12 +85,14 @@ export function PieceSelector({
             title={enabled ? undefined : t.receiving.alreadyConfirmed}
             onClick={() => onChange(n)}
             className={cn(
-              "flex h-12 items-center justify-center rounded-xl border text-sm font-semibold tabular-nums transition-colors",
-              selected && "border-primary bg-primary text-primary-foreground",
-              !selected && enabled && "hover:bg-muted",
-              !enabled && "cursor-not-allowed border-dashed bg-muted/50 text-muted-foreground line-through"
+              "flex h-12 items-center justify-center gap-1 rounded-xl border text-sm font-semibold tabular-nums transition-all duration-150",
+              selected && "scale-105 border-primary bg-primary text-primary-foreground shadow-md shadow-primary/25",
+              !selected && enabled && "bg-card shadow-xs hover:bg-muted active:scale-95",
+              // already received = done (green), never pickable again
+              !enabled && "tone-success cursor-not-allowed opacity-80"
             )}
           >
+            {!enabled && <CheckIcon className="size-3.5" />}
             {n}/{total}
           </button>
         )

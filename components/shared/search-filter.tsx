@@ -46,7 +46,10 @@ export function FilterBar({
       {filters.map((f) => (
         <Select key={f.key} value={f.value} onValueChange={f.onChange}>
           <SelectTrigger className="h-11 min-w-36" aria-label={f.label}>
-            <SelectValue placeholder={f.label} />
+            {/* explicit text: Radix only knows option labels once they mount */}
+            <SelectValue placeholder={f.label}>
+              {f.label}: {f.value === ALL ? t.app.all : (f.options.find((o) => o.value === f.value)?.label ?? f.value)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>

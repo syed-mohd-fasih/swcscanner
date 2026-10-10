@@ -4,50 +4,124 @@
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "carrierCode", "order": "ASCENDING" },
-        { "fieldPath": "receivingState", "order": "ASCENDING" }
+        {
+          "fieldPath": "carrierCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivingState",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "carrierCode", "order": "ASCENDING" },
-        { "fieldPath": "releaseState", "order": "ASCENDING" },
-        { "fieldPath": "receivingState", "order": "ASCENDING" }
+        {
+          "fieldPath": "carrierCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "releaseState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivingState",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "carrierCode", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "releaseState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivingState",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "releaseState", "order": "ASCENDING" },
-        { "fieldPath": "receivingState", "order": "ASCENDING" }
+        {
+          "fieldPath": "storageState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "releaseState",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "storageState", "order": "ASCENDING" },
-        { "fieldPath": "releaseState", "order": "ASCENDING" }
+        {
+          "fieldPath": "storageState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "releaseState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivingState",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "items",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "storageState", "order": "ASCENDING" },
-        { "fieldPath": "releaseState", "order": "ASCENDING" },
-        { "fieldPath": "receivingState", "order": "ASCENDING" }
+        {
+          "fieldPath": "carrierCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "receivingState",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "itemId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "manifests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "carrierCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "manifests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "carrierCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "manifestName",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

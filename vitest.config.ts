@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["**/*.test.ts"],
-    exclude: ["node_modules", ".next", "tests/rules/**"],
+    // tests/** need the Firestore emulator: bun run test:emulator
+    exclude: ["node_modules", ".next", "tests/**"],
   },
 })

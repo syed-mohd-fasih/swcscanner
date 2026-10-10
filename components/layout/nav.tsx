@@ -26,7 +26,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={isActive(pathname, item.href)}>
+              <SidebarMenuButton asChild isActive={isActive(pathname, item.href)} className="h-11 text-sm md:h-8">
                 <Link href={item.href} onClick={() => setOpenMobile(false)}>
                   <item.icon />
                   <span>{t.nav[item.label]}</span>

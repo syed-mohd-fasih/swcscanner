@@ -1,5 +1,4 @@
-import type { ManifestLine } from "@/domain/manifests/types"
-import type { ManifestHeader } from "@/services/manifests"
+import type { ManifestHeader, ManifestLine } from "@/domain/manifests/types"
 
 /**
  * Manifest import. An importer turns a file into the same header + lines

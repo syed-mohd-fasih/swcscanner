@@ -1,34 +1,31 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
+import { useMemo, useState } from "react"
+
+import { deleteExpectedAction } from "@/app/actions/admin"
 
 import { ItemStatus } from "@/components/items/status-badges"
 import { LocationBadge } from "@/components/locations/location-selector"
 import { ManifestProgress } from "@/components/manifests/manifest-progress"
-import { useSession } from "@/components/providers/session-provider"
-import { useLocationMap } from "@/components/release/release-workspace"
+import { useLocationMap } from "@/components/providers/config-provider"
 import { DataTable, toggleInSet, type Column } from "@/components/shared/data-table"
 import { InfoList } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
 import { ALL, FilterBar, matchesSearch, SearchBar } from "@/components/shared/search-filter"
-import { EmptyState, Ltr, LoadingState } from "@/components/shared/states"
+import { EmptyState, Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RECEIVING_STATES, RELEASE_STATES, type Item } from "@/domain/items/types"
 import { summarizeManifest } from "@/domain/manifests/rules"
-import { useLocalQuery } from "@/hooks/use-local-query"
+import type { Manifest } from "@/domain/manifests/types"
 import { fmt, useI18n } from "@/lib/i18n/client"
-import { itemRepository, manifestRepository } from "@/repositories/indexeddb"
-import { deleteExpectedPieces } from "@/services/manifests"
-import { adminPull } from "@/sync/pull"
+import { callAction } from "@/lib/submit-op"
 
 /** Manifest = grouping + aggregate view; items keep their own lifecycle. */
-export function ManifestDetail({ manifestId }: { manifestId: string }) {
+export function ManifestDetail({ manifest, items }: { manifest: Manifest | null; items: Item[] }) {
   const { t } = useI18n()
-  const { ready } = useSession()
   const router = useRouter()
   const confirm = useConfirm()
   const locations = useLocationMap()
@@ -37,14 +34,6 @@ export function ManifestDetail({ manifestId }: { manifestId: string }) {
   const [release, setRelease] = useState(ALL)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (!ready) return
-    adminPull.manifests().catch(() => {})
-    adminPull.manifestItems(manifestId).catch(() => {})
-  }, [ready, manifestId])
-
-  const manifest = useLocalQuery(() => manifestRepository.get(manifestId), [manifestId])
-  const { data: items = [] } = useLocalQuery(() => itemRepository.listByManifest(manifestId), [manifestId])
   const summary = useMemo(() => summarizeManifest(items), [items])
 
   const rows = useMemo(
@@ -58,9 +47,8 @@ export function ManifestDetail({ manifestId }: { manifestId: string }) {
   )
   const byId = useMemo(() => new Map(items.map((i) => [i.internalItemId, i])), [items])
 
-  if (manifest.loading) return <LoadingState />
-  if (!manifest.data) return <EmptyState />
-  const m = manifest.data
+  if (!manifest) return <EmptyState />
+  const m = manifest
 
   const columns: Column<Item>[] = [
     { key: "itemId", header: t.fields.itemId, cell: (i) => <Ltr className="font-medium">{i.itemId}</Ltr> },
@@ -77,9 +65,10 @@ export function ManifestDetail({ manifestId }: { manifestId: string }) {
   async function deleteSelected() {
     const ids = [...selected]
     if (!(await confirm({ description: fmt(t.manifests.confirmDelete, { n: ids.length }), destructive: true, irreversible: true }))) return
-    const result = await deleteExpectedPieces(ids)
-    if (!result.ok) return void toast.error(result.error.message)
+    const deleted = await callAction(t, () => deleteExpectedAction({ internalItemIds: ids }))
+    if (deleted === null) return
     setSelected(new Set())
+    router.refresh()
   }
 
   return (

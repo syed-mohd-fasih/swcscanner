@@ -11,6 +11,9 @@ export type DomainErrorCode =
   | "NOT_UNIDENTIFIED"
   | "NOT_EXPECTED"
   | "FORBIDDEN"
+  | "NOT_FOUND"
+  | "INVALID_INPUT"
+  | "UNAUTHORIZED"
 
 export type DomainError = {
   code: DomainErrorCode

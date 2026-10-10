@@ -1,6 +1,6 @@
 "use client"
 
-import { BarcodeDetector, prepareZXingModule, type BarcodeFormat } from "barcode-detector/ponyfill"
+import type { BarcodeFormat } from "barcode-detector/ponyfill"
 import { CameraIcon, CameraOffIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
@@ -8,13 +8,31 @@ import type { RawScan } from "@/carriers"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n/client"
 
-// self-hosted decoder (see scripts/copy-wasm.ts) — no CDN at scan time
-prepareZXingModule({
-  overrides: {
-    locateFile: (path: string, prefix: string) =>
-      path.endsWith(".wasm") ? "/zxing/zxing_reader.wasm" : prefix + path,
-  },
-})
+type Detector = { detect(source: HTMLVideoElement): Promise<{ rawValue: string; format: string }[]> }
+type DetectorClass = {
+  new (options: { formats: BarcodeFormat[] }): Detector
+  getSupportedFormats?: () => Promise<string[]>
+}
+
+/**
+ * The phone's built-in barcode reader when it covers the needed formats
+ * (Android Chrome); otherwise the ZXing WASM ponyfill, loaded only then
+ * (self-hosted decoder, see scripts/copy-wasm.ts — no CDN at scan time).
+ */
+async function createDetector(formats: BarcodeFormat[]): Promise<Detector> {
+  const native = (globalThis as { BarcodeDetector?: DetectorClass }).BarcodeDetector
+  if (native?.getSupportedFormats) {
+    const supported = await native.getSupportedFormats().catch(() => [] as string[])
+    if (formats.every((f) => supported.includes(f))) return new native({ formats })
+  }
+  const { BarcodeDetector, prepareZXingModule } = await import("barcode-detector/ponyfill")
+  prepareZXingModule({
+    overrides: {
+      locateFile: (path: string, prefix: string) => (path.endsWith(".wasm") ? "/zxing/zxing_reader.wasm" : prefix + path),
+    },
+  })
+  return new BarcodeDetector({ formats })
+}
 
 const LINEAR: BarcodeFormat[] = ["code_128", "code_39", "code_93", "codabar", "ean_13", "ean_8", "itf", "upc_a", "upc_e"]
 
@@ -46,9 +64,9 @@ function feedback() {
 type CameraError = "insecure" | "denied" | "unavailable"
 
 /**
- * Phone-camera barcode scanner. Decodes continuously with ZXing (WASM) via
- * the BarcodeDetector API. In "pdf417" mode linear codes are still detected
- * so the parser can tell the operator they scanned the wrong one.
+ * Phone-camera barcode scanner (BarcodeDetector API). Starts by itself when
+ * the screen opens. In "pdf417" mode linear codes are still detected so the
+ * parser can tell the operator they scanned the wrong one.
  */
 export function ScannerView({
   mode,
@@ -74,13 +92,18 @@ export function ScannerView({
     pausedRef.current = paused
   })
 
+  /** bumps on stop/unmount so a late-arriving camera stream is released */
+  const generationRef = useRef(0)
+
   const stop = useCallback(() => {
+    generationRef.current++
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setRunning(false)
   }, [])
 
   const start = useCallback(async () => {
+    const generation = ++generationRef.current
     setError(null)
     if (!window.isSecureContext) return setError("insecure")
     if (!navigator.mediaDevices?.getUserMedia) return setError("unavailable")
@@ -90,6 +113,10 @@ export function ScannerView({
         // dense PDF417 needs resolution; the browser picks the closest
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
       })
+      if (generation !== generationRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -97,22 +124,35 @@ export function ScannerView({
       }
       setRunning(true)
     } catch (e) {
-      setError((e as DOMException).name === "NotAllowedError" ? "denied" : "unavailable")
+      if (generation === generationRef.current) {
+        setError((e as DOMException).name === "NotAllowedError" ? "denied" : "unavailable")
+      }
     }
   }, [])
 
-  useEffect(() => stop, [stop])
+  // start right away; if the browser needs a tap first, the button shows
+  useEffect(() => {
+    const timer = setTimeout(() => void start(), 0)
+    return () => {
+      clearTimeout(timer)
+      stop()
+    }
+  }, [start, stop])
 
   useEffect(() => {
     if (!running) return
     const formats: BarcodeFormat[] = mode === "pdf417" ? ["pdf417", ...LINEAR] : LINEAR
-    const detector = new BarcodeDetector({ formats })
+    let detector: Detector | null = null
     let cancelled = false
     let timer: ReturnType<typeof setTimeout>
+    createDetector(formats).then(
+      (d) => (detector = d),
+      () => setError("unavailable")
+    )
 
     const tick = async () => {
       const video = videoRef.current
-      if (!cancelled && video && video.readyState >= 2 && !pausedRef.current) {
+      if (!cancelled && detector && video && video.readyState >= 2 && !pausedRef.current) {
         try {
           const found = (await detector.detect(video)).filter((b) => b.rawValue)
           if (found.length > 0) {
@@ -148,15 +188,15 @@ export function ScannerView({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-black sm:aspect-video">
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-black shadow-md sm:aspect-video">
         <video ref={videoRef} playsInline muted className="size-full object-cover" />
         {running && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div
               className={
                 mode === "pdf417"
-                  ? "h-2/5 w-4/5 rounded-xl border-2 border-white/80"
-                  : "h-1/4 w-4/5 rounded-xl border-2 border-white/80"
+                  ? "h-2/5 w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgb(0_0_0/0.25)] animate-scan-frame"
+                  : "h-1/4 w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgb(0_0_0/0.25)] animate-scan-frame"
               }
             />
           </div>

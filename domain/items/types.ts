@@ -83,8 +83,13 @@ export type Item = {
   createdAt: string
   updatedAt: string
 
-  /** incremented on every write; used for conflict detection on sync */
+  /** incremented on every write (history / audit) */
   version: number
+  /**
+   * The client operation that last wrote this piece. A retried operation
+   * (lost response, retry queue) that already applied is answered as success.
+   */
+  lastOpId?: string | null
 }
 
 /** Fields captured from a physical label (manual entry or barcode). */

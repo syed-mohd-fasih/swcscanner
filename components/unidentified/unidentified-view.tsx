@@ -2,33 +2,32 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
 
-import { ItemStatus } from "@/components/items/status-badges"
+import { mergeAction, searchExpectedAction, updateInvestigationAction } from "@/app/actions/admin"
+
+import { InvestigationBadge, ItemStatus } from "@/components/items/status-badges"
 import { LocationBadge } from "@/components/locations/location-selector"
 import { useSession } from "@/components/providers/session-provider"
-import { useLocationMap } from "@/components/release/release-workspace"
+import { useLocationMap } from "@/components/providers/config-provider"
 import { DataTable, type Column } from "@/components/shared/data-table"
 import { Field, InfoList, useCarriers } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
 import { ALL, FilterBar, matchesSearch, SearchBar } from "@/components/shared/search-filter"
-import { EmptyState, Ltr, LoadingState } from "@/components/shared/states"
+import { EmptyState, Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { INVESTIGATION_STATUSES, type InvestigationStatus, type Item } from "@/domain/items/types"
-import { useLocalQuery } from "@/hooks/use-local-query"
+import { newId } from "@/domain/shared/ids"
 import { fmt, useI18n } from "@/lib/i18n/client"
-import { itemRepository } from "@/repositories/indexeddb"
-import { mergeIntoExpected, updateInvestigation } from "@/services/unidentified"
-import { adminPull, pullReceivingWorkspace } from "@/sync/pull"
+import { callAction } from "@/lib/submit-op"
 
 /** Unidentified inventory stays here, searchable, until investigated/resolved. */
-export function UnidentifiedView() {
+export function UnidentifiedView({ items }: { items: Item[] }) {
   const { t } = useI18n()
-  const { ready, isAdmin } = useSession()
+  const { isAdmin } = useSession()
   const router = useRouter()
   const locations = useLocationMap()
   const carriers = useCarriers(false).data ?? []
@@ -36,17 +35,6 @@ export function UnidentifiedView() {
   const [carrier, setCarrier] = useState(ALL)
   const [status, setStatus] = useState(ALL)
   const [active, setActive] = useState<Item | null>(null)
-  const [pulling, setPulling] = useState(true)
-
-  useEffect(() => {
-    if (!ready) return
-    adminPull
-      .unidentified()
-      .catch(() => {})
-      .finally(() => setPulling(false))
-  }, [ready])
-
-  const { data: items = [], loading } = useLocalQuery(() => itemRepository.listByReceivingState("unidentified"), [])
 
   const rows = useMemo(
     () =>
@@ -72,7 +60,7 @@ export function UnidentifiedView() {
     {
       key: "investigation",
       header: t.fields.investigation,
-      cell: (i) => (i.investigation ? t.states.investigation[i.investigation.status] : "—"),
+      cell: (i) => (i.investigation ? <InvestigationBadge status={i.investigation.status} /> : "—"),
     },
   ]
 
@@ -100,17 +88,13 @@ export function UnidentifiedView() {
           ]}
         />
       </div>
-      {loading || (pulling && items.length === 0) ? (
-        <LoadingState />
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={(i) => i.internalItemId}
-          onRowClick={(i) => (isAdmin ? setActive(i) : router.push(`/items/${i.internalItemId}`))}
-          empty={<EmptyState />}
-        />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(i) => i.internalItemId}
+        onRowClick={(i) => (isAdmin ? setActive(i) : router.push(`/items/${i.internalItemId}`))}
+        empty={<EmptyState />}
+      />
       {active && <UnidentifiedAdminDialog item={active} onClose={() => setActive(null)} />}
     </div>
   )
@@ -119,29 +103,38 @@ export function UnidentifiedView() {
 /** Admin: investigation notes and matching to a manifest piece. */
 function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () => void }) {
   const { t } = useI18n()
-  const { user } = useSession()
   const confirm = useConfirm()
   const router = useRouter()
   const [status, setStatus] = useState<InvestigationStatus>(item.investigation?.status ?? "open")
   const [note, setNote] = useState(item.investigation?.note ?? "")
   const [mergeQuery, setMergeQuery] = useState(item.itemId)
 
-  useEffect(() => {
-    // bring this carrier's expected pieces onto the device for matching
-    pullReceivingWorkspace(item.carrierCode, true).catch(() => {})
-  }, [item.carrierCode])
+  const [expected, setExpected] = useState<Item[]>([])
 
-  const expected =
-    useLocalQuery(() => itemRepository.listByReceivingState("expected"), []).data?.filter(
-      (e) => e.carrierCode === item.carrierCode && matchesSearch(mergeQuery, e.itemId, e.shipper, e.consignee)
-    ) ?? []
+  // expected pieces of this carrier whose ID starts with the search (≤ 20 reads)
+  useEffect(() => {
+    let live = true
+    const timer = setTimeout(() => {
+      searchExpectedAction({ carrierCode: item.carrierCode, prefix: mergeQuery })
+        .then((r) => live && setExpected(r.ok ? r.value : []))
+        .catch(() => live && setExpected([]))
+    }, 300)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [item.carrierCode, mergeQuery])
 
   async function saveInvestigation() {
     if (!(await confirm({}))) return
-    const result = await updateInvestigation(item.internalItemId, status, note.trim() || null, user.uid)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(t.items.corrected)
+    const saved = await callAction(
+      t,
+      () => updateInvestigationAction({ opId: newId(), internalItemId: item.internalItemId, status, note: note.trim() || null }),
+      t.items.corrected
+    )
+    if (!saved) return
     onClose()
+    router.refresh()
   }
 
   async function merge(target: Item) {
@@ -150,9 +143,12 @@ function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () =>
       irreversible: true,
     })
     if (!ok) return
-    const result = await mergeIntoExpected(item.internalItemId, target.internalItemId, user.uid)
-    if (!result.ok) return void toast.error(result.error.message)
-    toast.success(t.unidentified.merged)
+    const merged = await callAction(
+      t,
+      () => mergeAction({ opId: newId(), unidentifiedId: item.internalItemId, expectedId: target.internalItemId }),
+      t.unidentified.merged
+    )
+    if (!merged) return
     onClose()
     router.push(`/items/${target.internalItemId}`)
   }
@@ -178,7 +174,7 @@ function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () =>
           {t.app.open}
         </Button>
 
-        <section className="flex flex-col gap-3 rounded-2xl border p-3">
+        <section className="surface flex flex-col gap-3 p-3">
           <h3 className="font-medium">{t.unidentified.setStatus}</h3>
           <Field label={t.fields.status}>
             <Select value={status} onValueChange={(v) => setStatus(v as InvestigationStatus)}>
@@ -200,12 +196,12 @@ function UnidentifiedAdminDialog({ item, onClose }: { item: Item; onClose: () =>
           <Button onClick={() => void saveInvestigation()}>{t.app.save}</Button>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-2xl border p-3">
+        <section className="surface flex flex-col gap-3 p-3">
           <h3 className="font-medium">{t.unidentified.merge}</h3>
           <p className="text-sm text-muted-foreground">{t.unidentified.mergeHelp}</p>
           <SearchBar value={mergeQuery} onChange={setMergeQuery} />
           <ul className="flex max-h-72 flex-col divide-y overflow-y-auto">
-            {expected.slice(0, 50).map((e) => (
+            {expected.map((e) => (
               <li key={e.internalItemId} className="flex items-center justify-between gap-2 py-2 text-sm">
                 <span className="min-w-0">
                   <Ltr className="font-medium">{e.itemId}</Ltr> <Ltr className="text-muted-foreground">{e.pieceNumber}/{e.pieceTotal}</Ltr>

@@ -44,11 +44,11 @@ export function UsersView() {
   const columns: Column<AppUser>[] = [
     { key: "name", header: t.fields.name, cell: (u) => u.name },
     { key: "username", header: t.auth.username, cell: (u) => <Ltr>{u.username}</Ltr> },
-    { key: "role", header: t.fields.role, cell: (u) => <Badge variant="outline">{roleLabel(u.role)}</Badge> },
+    { key: "role", header: t.fields.role, cell: (u) => <Badge variant={u.role === "ADMIN" ? "accent" : "neutral"}>{roleLabel(u.role)}</Badge> },
     {
       key: "status",
       header: t.fields.status,
-      cell: (u) => (u.disabled ? <Badge variant="destructive">{t.users.disable}</Badge> : <Badge variant="secondary">{t.fields.active}</Badge>),
+      cell: (u) => (u.disabled ? <Badge variant="danger">{t.users.disable}</Badge> : <Badge variant="success">{t.fields.active}</Badge>),
     },
   ]
 

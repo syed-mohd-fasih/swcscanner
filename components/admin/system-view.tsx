@@ -1,123 +1,121 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { RefreshCwIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
 
-import { useSession, useSyncStatus } from "@/components/providers/session-provider"
+import { Callout } from "@/components/shared/callout"
+import { useRetryQueue } from "@/components/providers/session-provider"
 import { InfoList } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
 import { Ltr } from "@/components/shared/states"
-import { useOutboxCounts } from "@/components/sync/sync-status"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { DB_NAME, getDb } from "@/lib/db/schema"
-import { isEmulatorMode } from "@/lib/firebase/client"
-import { useI18n } from "@/lib/i18n/client"
-import { useLocalQuery } from "@/hooks/use-local-query"
-import { remote } from "@/repositories/firestore/remote"
-import { syncRepository } from "@/repositories/indexeddb"
+import { fmt, useI18n } from "@/lib/i18n/client"
+import { cn } from "@/lib/utils"
+import type { Usage, UsageMeter } from "@/server/data/usage"
 
-/** Development/admin diagnostics. */
-export function SystemView() {
-  const { t } = useI18n()
-  const { sync } = useSession()
-  const status = useSyncStatus()
-  const counts = useOutboxCounts()
+/** Admin: free-plan usage today (like an AI usage meter) and this phone. */
+export function SystemView({ usage, projectId, emulator }: { usage: Usage; projectId: string; emulator: boolean }) {
+  const { t, locale } = useI18n()
+  const router = useRouter()
   const confirm = useConfirm()
-  const [backend, setBackend] = useState<"checking" | "ok" | "down">("checking")
+  const queue = useRetryQueue()
+  const time = (iso: string) =>
+    new Date(iso).toLocaleTimeString(locale === "ar" ? "ar-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit" })
 
-  const local = useLocalQuery(async () => {
-    const db = await getDb()
-    return {
-      items: await db.count("items"),
-      manifests: await db.count("manifests"),
-      locations: await db.count("locations"),
-      configVersions: (await syncRepository.getMeta<Record<string, string>>("configVersions")) ?? {},
-      pulls: (await db.getAllKeys("meta")).filter((k) => String(k).startsWith("pull:")).length,
+  async function resetDevice() {
+    if (!(await confirm({ description: t.system.confirmClear, destructive: true }))) return
+    try {
+      for (const store of [localStorage, sessionStorage])
+        for (const key of Object.keys(store)) if (key.startsWith("swc:")) store.removeItem(key)
+    } catch {
+      // storage unavailable
     }
-  }, []).data
-
-  const probe = useCallback(() => {
-    remote
-      .configVersions()
-      .then(() => setBackend("ok"))
-      .catch(() => setBackend("down"))
-  }, [])
-  useEffect(probe, [probe])
-  const check = () => {
-    setBackend("checking")
-    probe()
-  }
-
-  async function clearDevice() {
-    if (!(await confirm({ description: t.system.confirmClear, irreversible: true }))) return
-    ;(await getDb()).close()
-    indexedDB.deleteDatabase(DB_NAME)
     window.location.reload()
   }
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t.system.title} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.system.backend}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <InfoList
-              rows={[
-                {
-                  label: t.system.backend,
-                  value: (
-                    <Badge variant={backend === "down" ? "destructive" : "secondary"}>
-                      {backend === "ok" ? t.system.reachable : backend === "down" ? t.system.unreachable : t.app.loading}
-                    </Badge>
-                  ),
-                },
-                { label: t.system.emulator, value: isEmulatorMode ? t.app.yes : t.app.no },
-                { label: t.sync.online, value: status.online ? t.app.yes : t.app.no },
-              ]}
-            />
-            <Button variant="outline" onClick={check}>
-              {t.app.retry}
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t.system.indexedDb}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <InfoList
-              rows={[
-                { label: t.system.localItems, value: local?.items },
-                { label: t.manifests.title, value: local?.manifests },
-                { label: t.locations.title, value: local?.locations },
-                {
-                  label: t.system.outbox,
-                  value: <Ltr>{`pending ${counts.pending} · syncing ${counts.syncing} · failed ${counts.failed}`}</Ltr>,
-                },
-                {
-                  label: t.system.lastSync,
-                  value: <Ltr>{status.lastSyncAt ?? t.sync.never}</Ltr>,
-                },
-                {
-                  label: t.system.configVersions,
-                  value: <Ltr className="text-xs break-all">{JSON.stringify(local?.configVersions ?? {})}</Ltr>,
-                },
-              ]}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={() => void sync.flush()}>{t.system.flush}</Button>
-              <Button variant="destructive" onClick={() => void clearDevice()}>
-                {t.system.clearLocal}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-2">
+          <div>
+            <CardTitle>{t.usage.title}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{t.usage.help}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => router.refresh()} aria-label={t.app.refresh}>
+            <RefreshCwIcon />
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {usage.available ? (
+            <>
+              <Meter label={t.usage.reads} meter={usage.reads} />
+              <Meter label={t.usage.writes} meter={usage.writes} />
+              <Meter label={t.usage.deletes} meter={usage.deletes} />
+              <Meter
+                label={`${t.usage.storage}${usage.storage.estimated ? ` (${t.usage.estimated})` : ""}`}
+                meter={usage.storage}
+                bytes
+              />
+              <p className="text-xs text-muted-foreground">
+                {fmt(t.usage.resetsAt, { time: time(usage.resetsAt) })} · {fmt(t.usage.checkedAt, { time: time(usage.checkedAt) })}
+              </p>
+            </>
+          ) : (
+            <Callout tone={usage.reason === "emulator" ? "info" : "warning"}>
+              {usage.reason === "emulator" ? t.usage.emulator : usage.reason === "permission" ? t.usage.permission : t.usage.unavailable}
+            </Callout>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.system.device}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <InfoList
+            rows={[
+              { label: t.system.backend, value: emulator ? t.system.emulator : <Ltr>{`${t.system.cloud}: ${projectId}`}</Ltr> },
+              { label: t.system.waiting, value: <Ltr>{queue.length}</Ltr> },
+            ]}
+          />
+          <Button variant="outline" className="self-start" onClick={() => void resetDevice()}>
+            {t.system.clearLocal}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function Meter({ label, meter, bytes = false }: { label: string; meter: UsageMeter; bytes?: boolean }) {
+  const share = meter.limit > 0 ? meter.used / meter.limit : 0
+  const pct = Math.min(100, Math.round(share * 100))
+  const show = (n: number) => (bytes ? formatBytes(n) : n.toLocaleString("en-US"))
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="font-medium">{label}</span>
+        <Ltr className="text-muted-foreground tabular-nums">
+          {show(meter.used)} / {show(meter.limit)} · {pct}%
+        </Ltr>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+        <div
+          className={cn("h-full rounded-full transition-[width] duration-700 ease-out", share >= 0.8 ? "bg-destructive" : share >= 0.6 ? "bg-warning" : "bg-success")}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   )
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`
+  return `${Math.round(n / 1024)} KB`
 }

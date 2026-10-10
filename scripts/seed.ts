@@ -120,8 +120,9 @@ async function main() {
   const manifests: Manifest[] = []
   const items: Item[] = []
   const addManifest = (m: Manifest, lines: ManifestLine[]) => {
-    manifests.push(m)
-    for (const l of lines) items.push(...unwrap(expandManifestLine(l, m.manifestId, ctx)))
+    const pieces = lines.flatMap((l) => unwrap(expandManifestLine(l, m.manifestId, ctx)))
+    manifests.push({ ...m, pieceCount: pieces.length })
+    items.push(...pieces)
   }
   /** receive, then (separately) store at a location — or leave awaiting / direct release */
   const receive = (itemId: string, piece: number, where: string | "later" | "direct", date = today) => {
@@ -239,7 +240,6 @@ async function main() {
     ...locations().map((l) => ["locations", l.locationId, l] as [string, string, object]),
     ...manifests.map((m) => ["manifests", m.manifestId, m] as [string, string, object]),
     ...items.map((i) => ["items", i.internalItemId, i] as [string, string, object]),
-    ["config", "versions", { locations: now(), carriers: now() }],
   ]
   for (let i = 0; i < writes.length; i += 400) {
     const batch = db.batch()

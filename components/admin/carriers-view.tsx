@@ -1,15 +1,16 @@
 "use client"
 
 import { PlusIcon } from "lucide-react"
-import { useEffect, useState } from "react"
-import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 
-import { useSession } from "@/components/providers/session-provider"
+import { saveCarrierAction } from "@/app/actions/admin"
+
 import { DataTable, type Column } from "@/components/shared/data-table"
 import { Field, useCarriers } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
 import { PageHeader } from "@/components/shared/page-header"
-import { Ltr, LoadingState } from "@/components/shared/states"
+import { Ltr } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,19 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PARSER_IDS, type Carrier, type ParserId } from "@/domain/carriers/types"
 import { fmt, useI18n } from "@/lib/i18n/client"
 import { compileIdPattern } from "@/carriers"
-import { saveCarrier } from "@/services/config"
-import { pullConfig } from "@/sync/pull"
+import { callAction } from "@/lib/submit-op"
 
 /** Carrier list: code (manifest names), name, and which barcode parser applies. */
 export function CarriersView() {
   const { t } = useI18n()
-  const { ready } = useSession()
-  const { data: carriers, loading } = useCarriers(false)
+  const { data: carriers } = useCarriers(false)
   const [editing, setEditing] = useState<Carrier | "new" | null>(null)
-
-  useEffect(() => {
-    if (ready) pullConfig().catch(() => {})
-  }, [ready])
 
   const columns: Column<Carrier>[] = [
     { key: "code", header: t.fields.code, cell: (c) => <Ltr className="font-medium">{c.carrierCode}</Ltr> },
@@ -39,7 +34,7 @@ export function CarriersView() {
     {
       key: "active",
       header: t.fields.status,
-      cell: (c) => <Badge variant={c.active ? "secondary" : "destructive"}>{c.active ? t.fields.active : t.locations.inactive}</Badge>,
+      cell: (c) => <Badge variant={c.active ? "success" : "neutral"}>{c.active ? t.fields.active : t.locations.inactive}</Badge>,
     },
   ]
 
@@ -54,11 +49,7 @@ export function CarriersView() {
           </Button>
         }
       />
-      {loading ? (
-        <LoadingState />
-      ) : (
-        <DataTable columns={columns} rows={carriers ?? []} rowKey={(c) => c.carrierCode} onRowClick={(c) => setEditing(c)} />
-      )}
+      <DataTable columns={columns} rows={carriers} rowKey={(c) => c.carrierCode} onRowClick={(c) => setEditing(c)} />
       {editing && <CarrierDialog carrier={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
     </div>
   )
@@ -66,7 +57,7 @@ export function CarriersView() {
 
 function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose: () => void }) {
   const { t } = useI18n()
-  const { sync } = useSession()
+  const router = useRouter()
   const confirm = useConfirm()
   const [code, setCode] = useState(carrier?.carrierCode ?? "")
   const [name, setName] = useState(carrier?.name ?? "")
@@ -79,10 +70,10 @@ function CarrierDialog({ carrier, onClose }: { carrier: Carrier | null; onClose:
 
   async function save() {
     if (!(await confirm({ description: fmt(t.carriers.confirmSave, { code: code.toUpperCase() }) }))) return
-    const result = await saveCarrier({ carrierCode: code, name, parser, idPattern, active })
-    if (!result.ok) return void toast.error(result.error.message)
-    void sync.flush()
+    const saved = await callAction(t, () => saveCarrierAction({ carrierCode: code, name, parser, idPattern, active }))
+    if (!saved) return
     onClose()
+    router.refresh()
   }
 
   return (
