@@ -1,9 +1,11 @@
 "use client"
 
-import { RefreshCwIcon } from "lucide-react"
-import { useRouter } from "next/navigation"
+// USAGE METER (disabled): Cloud Monitoring only answers projects with billing (Blaze); this project stays
+// on Spark. Search "USAGE METER (disabled)" to bring it back.
+// import { RefreshCwIcon } from "lucide-react"
+// import { useRouter } from "next/navigation"
+// import { Callout } from "@/components/shared/callout"
 
-import { Callout } from "@/components/shared/callout"
 import { useRetryQueue } from "@/components/providers/session-provider"
 import { InfoList } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
@@ -11,18 +13,23 @@ import { PageHeader } from "@/components/shared/page-header"
 import { Ltr } from "@/components/shared/states"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { fmt, useI18n } from "@/lib/i18n/client"
-import { cn } from "@/lib/utils"
-import type { Usage, UsageMeter } from "@/server/data/usage"
+import { useI18n } from "@/lib/i18n/client"
+// USAGE METER (disabled):
+// import { fmt } from "@/lib/i18n/client"
+// import { cn } from "@/lib/utils"
+// import type { Usage, UsageMeter } from "@/server/data/usage"
 
-/** Admin: free-plan usage today (like an AI usage meter) and this phone. */
-export function SystemView({ usage, projectId, emulator }: { usage: Usage; projectId: string; emulator: boolean }) {
-  const { t, locale } = useI18n()
-  const router = useRouter()
+/** Admin: this phone and the backend it talks to. */
+// USAGE METER (disabled): SystemView also took `usage: Usage` (free-plan usage today, like an AI usage meter)
+export function SystemView({ projectId, emulator }: { projectId: string; emulator: boolean }) {
+  const { t } = useI18n()
+  // USAGE METER (disabled):
+  // const { locale } = useI18n()
+  // const router = useRouter()
   const confirm = useConfirm()
   const queue = useRetryQueue()
-  const time = (iso: string) =>
-    new Date(iso).toLocaleTimeString(locale === "ar" ? "ar-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit" })
+  // const time = (iso: string) =>
+  //   new Date(iso).toLocaleTimeString(locale === "ar" ? "ar-u-nu-latn" : "en-GB", { hour: "2-digit", minute: "2-digit" })
 
   async function resetDevice() {
     if (!(await confirm({ description: t.system.confirmClear, destructive: true }))) return
@@ -39,6 +46,7 @@ export function SystemView({ usage, projectId, emulator }: { usage: Usage; proje
     <div className="flex flex-col gap-4">
       <PageHeader title={t.system.title} />
 
+      {/* USAGE METER (disabled): usage card
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-2">
           <div>
@@ -72,6 +80,8 @@ export function SystemView({ usage, projectId, emulator }: { usage: Usage; proje
         </CardContent>
       </Card>
 
+      */}
+
       <Card>
         <CardHeader>
           <CardTitle>{t.system.device}</CardTitle>
@@ -92,30 +102,31 @@ export function SystemView({ usage, projectId, emulator }: { usage: Usage; proje
   )
 }
 
-function Meter({ label, meter, bytes = false }: { label: string; meter: UsageMeter; bytes?: boolean }) {
-  const share = meter.limit > 0 ? meter.used / meter.limit : 0
-  const pct = Math.min(100, Math.round(share * 100))
-  const show = (n: number) => (bytes ? formatBytes(n) : n.toLocaleString("en-US"))
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium">{label}</span>
-        <Ltr className="text-muted-foreground tabular-nums">
-          {show(meter.used)} / {show(meter.limit)} · {pct}%
-        </Ltr>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-muted" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-        <div
-          className={cn("h-full rounded-full transition-[width] duration-700 ease-out", share >= 0.8 ? "bg-destructive" : share >= 0.6 ? "bg-warning" : "bg-success")}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function formatBytes(n: number): string {
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`
-  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`
-  return `${Math.round(n / 1024)} KB`
-}
+// USAGE METER (disabled):
+// function Meter({ label, meter, bytes = false }: { label: string; meter: UsageMeter; bytes?: boolean }) {
+//   const share = meter.limit > 0 ? meter.used / meter.limit : 0
+//   const pct = Math.min(100, Math.round(share * 100))
+//   const show = (n: number) => (bytes ? formatBytes(n) : n.toLocaleString("en-US"))
+//   return (
+//     <div className="flex flex-col gap-1.5">
+//       <div className="flex items-baseline justify-between gap-2 text-sm">
+//         <span className="font-medium">{label}</span>
+//         <Ltr className="text-muted-foreground tabular-nums">
+//           {show(meter.used)} / {show(meter.limit)} · {pct}%
+//         </Ltr>
+//       </div>
+//       <div className="h-2.5 overflow-hidden rounded-full bg-muted" role="meter" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+//         <div
+//           className={cn("h-full rounded-full transition-[width] duration-700 ease-out", share >= 0.8 ? "bg-destructive" : share >= 0.6 ? "bg-warning" : "bg-success")}
+//           style={{ width: `${pct}%` }}
+//         />
+//       </div>
+//     </div>
+//   )
+// }
+//
+// function formatBytes(n: number): string {
+//   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`
+//   if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`
+//   return `${Math.round(n / 1024)} KB`
+// }

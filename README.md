@@ -27,7 +27,7 @@ Sign in as `admin / admin12345` or `operator / operator123`.
 | [Running locally](docs/development.md) | Emulators, demo data, phone testing, tests, troubleshooting |
 | [Deployment](docs/deployment.md) | Firebase project, Vercel, environment variables, first admin |
 | [Architecture](docs/architecture.md) | How the server-first design works: data layer, transactions, retry queue, security |
-| [Free-plan budget](docs/free-plan-budget.md) | Firestore limits, measured usage, the admin usage meter |
+| [Free-plan budget](docs/free-plan-budget.md) | Firestore limits, measured usage, how to check usage |
 | [Carriers and barcodes](docs/carriers-and-barcodes.md) | Parsers, FedEx PDF417, multi-barcode labels (DHL), adding a carrier |
 | [Changelog](docs/changelog.md) | What changed in each version |
 

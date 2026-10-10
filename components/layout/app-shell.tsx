@@ -1,6 +1,6 @@
 "use client"
 
-import { TriangleAlertIcon } from "lucide-react"
+// USAGE METER (disabled): import { TriangleAlertIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -19,14 +19,15 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { fmt, useI18n } from "@/lib/i18n/client"
+import { useI18n } from "@/lib/i18n/client" // USAGE METER (disabled): also imported fmt
 import { cn } from "@/lib/utils"
 
 /**
  * Mobile-first shell: a bottom tab bar for the operator's four core screens
  * on phones, the full sidebar (as a drawer on phones) for everything else.
  */
-export function AppShell({ children, usageWarning }: { children: React.ReactNode; usageWarning: number | null }) {
+// USAGE METER (disabled): AppShell also took `usageWarning: number | null` (the % used) for the banner below
+export function AppShell({ children }: { children: React.ReactNode }) {
   const { t, dir } = useI18n()
   const { isAdmin } = useSession()
 
@@ -56,6 +57,7 @@ export function AppShell({ children, usageWarning }: { children: React.ReactNode
             <HeaderSwitchers />
           </div>
         </header>
+        {/* USAGE METER (disabled): banner for admins at 80% of a free-plan limit
         {usageWarning !== null && (
           <Link
             href="/admin/system"
@@ -65,6 +67,7 @@ export function AppShell({ children, usageWarning }: { children: React.ReactNode
             {fmt(t.usage.warning, { percent: usageWarning })}
           </Link>
         )}
+        */}
         {/* SidebarInset already renders <main> */}
         <div className="mx-auto w-full max-w-6xl flex-1 px-3 pt-4 pb-24 sm:px-4 md:pb-8">{children}</div>
         <BottomBar />

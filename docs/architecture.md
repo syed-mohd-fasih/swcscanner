@@ -20,7 +20,7 @@ retry queue (localStorage) ─ resend ─►  same action, same opId → answere
 |---|---|
 | `domain/` | Pure business rules with unit tests: receipt, store, release scan, outcome, merge, manifest expansion. Each item is one physical piece, with separate receiving, storage and release states. |
 | `carriers/` | Barcode parsers (generic 1D, FedEx PDF417) and `resolveScans`, which picks the item barcode out of everything in view. Runs on the phone and the server. |
-| `server/data/` | Read side: exact or paged Firestore queries, cached config (carriers, locations, manifest headers), cached counts, the usage meter. `server-only`. |
+| `server/data/` | Read side: exact or paged Firestore queries, cached config (carriers, locations, manifest headers), cached counts. `server-only`. (`usage.ts`, the usage meter, is commented out; see [Free-plan budget](free-plan-budget.md).) |
 | `server/services/` | Write side: every mutation runs in a Firestore transaction that applies the `domain/` rule. |
 | `server/guard.ts` | Shared checks for server actions: signed-in role and input validation. |
 | `app/actions/` | Server actions (`operator.ts`, `admin.ts`), thin wrappers around the services. |

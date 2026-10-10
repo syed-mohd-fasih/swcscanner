@@ -38,10 +38,10 @@ Screens add a little on top:
 5. **Barcodes are parsed on the phone first.** Frames that only show non-item barcodes (such as DHL's routing code) never reach the server.
 6. **Archive after export** keeps stored data far below 1 GiB, at about 3 KB per piece including indexes.
 
-## Usage meter (admins)
+## Checking usage
 
-**Admin → System** shows today's reads, writes and deletes, plus stored data, as bars like an AI usage limit, with the reset time:
-- At **80%** of any limit, admins see a red banner on every screen. The app never blocks anything.
-- **Source:** the numbers come from Google Cloud Monitoring and lag a few minutes. Stored data is an estimate (piece and manifest counts × typical size).
-- **Setup:** the service account needs the **Monitoring Viewer** role. See [Deployment](deployment.md).
-- With the local emulators, the meter shows "not available".
+Use **Firebase console → Firestore → Usage**. It shows today's reads, writes and deletes for free.
+
+The in-app usage meter (Admin → System, with a warning banner at 80%) is **switched off**:
+- **Why:** its numbers come from Google Cloud Monitoring, which only answers projects with billing turned on (Blaze). This project stays on the free Spark plan.
+- **Bringing it back:** the code is commented out, not deleted. Search the code for `USAGE METER (disabled)` and uncomment each place. Then give the service account the **Monitoring Viewer** role in Google Cloud IAM.

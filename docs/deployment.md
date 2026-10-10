@@ -33,8 +33,6 @@ bun run setup:cloud admin 'a-strong-password'
 
 **Never run `bun run seed` against the cloud.** It is for the emulators only and wipes data.
 
-**For the usage meter:** in Google Cloud console → IAM, give the service account (`firebase-adminsdk-…@swcscanner.iam.gserviceaccount.com`) the **Monitoring Viewer** role. Without it, Admin → System says the role is missing.
-
 ## Vercel
 
 Import the GitHub repo. Vercel detects Next.js, and uses Bun because of `bun.lock`.

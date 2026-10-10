@@ -84,5 +84,5 @@ A piece that was received but not stored yet can't be release-scanned. Store it 
 - After the file is safely stored, released, repossessed or seized pieces can be archived (deleted from the system) to keep storage small.
 
 **System**
-- Shows today's free-plan usage (see [Free-plan budget](free-plan-budget.md)) and this phone's waiting scans.
+- Shows which backend the app uses and this phone's waiting scans. For free-plan usage, see [Free-plan budget](free-plan-budget.md).
 - *Reset this phone* clears saved sessions and lists.

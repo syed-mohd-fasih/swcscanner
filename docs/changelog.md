@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Locations:** admins add one rack at a time (any letter, then a continuous number range). Operators choose a location on three wheels (warehouse, rack, position).
+- **Usage meter switched off.** Cloud Monitoring needs billing (Blaze), and this project stays on Spark. The code is commented out (`USAGE METER (disabled)`); check usage in the Firebase console instead.
+
 ## 0.2.0: server-first
 
 The phone no longer keeps a copy of the data. The server does the work, within the free Firestore plan.
