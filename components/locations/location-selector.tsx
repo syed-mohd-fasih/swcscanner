@@ -1,12 +1,12 @@
 "use client"
 
 import { MapPinIcon } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 
+import { Callout } from "@/components/shared/callout"
 import { Ltr } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { WheelPicker, WheelPickerWrapper, type WheelPickerOption } from "@/components/ui/wheel-picker"
 import { formatLocation, type WarehouseLocation } from "@/domain/locations/types"
 import { useI18n } from "@/lib/i18n/client"
 import { useLocations } from "@/components/providers/config-provider"
@@ -16,10 +16,14 @@ export function useActiveLocations() {
 }
 
 const sortNatural = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true })
+const options = (values: Iterable<string>): WheelPickerOption[] =>
+  [...values].sort(sortNatural).map((v) => ({ value: v, label: v }))
 
 /**
- * Warehouse → Shelf → Position, only from the predefined (synced) dataset.
- * No free text — operators cannot invent locations.
+ * Warehouse → Rack → Position on three wheels, only from the predefined
+ * dataset (operators cannot invent locations). A wheel always shows a
+ * value, so a full location is always chosen: changing the warehouse or
+ * rack keeps the rack/position when it exists there, else takes the first.
  */
 export function LocationSelector({
   value,
@@ -30,95 +34,65 @@ export function LocationSelector({
 }) {
   const { t } = useI18n()
   const { data: locations } = useActiveLocations()
-  const current = locations.find((l) => l.locationId === value)
-  // partial choice (warehouse/rack) is local; `value` is only set once a
-  // full predefined location is chosen
-  const [partial, setPartial] = useState<{ w?: string; s?: string }>({})
-  const warehouse = current?.warehouse ?? partial.w
-  const rack = current?.rack ?? partial.s
   const tree = useMemo(() => buildTree(locations), [locations])
+  const current = locations.find((l) => l.locationId === value) ?? locations[0]
 
-  const pick = (w: string, s?: string, p?: string) => {
-    setPartial({ w, s })
-    const match = p
-      ? locations.find((l) => l.warehouse === w && l.rack === s && l.position === p)
-      : undefined
-    onChange(match?.locationId ?? null)
+  if (!current) return <Callout tone="warning">{t.locations.none}</Callout>
+  const racks = tree.get(current.warehouse)!
+  const positions = racks.get(current.rack)!
+
+  const pick = (w: string, r: string, p: string) => {
+    const wRacks = tree.get(w)
+    if (!wRacks) return
+    const rack = wRacks.has(r) ? r : [...wRacks.keys()].sort(sortNatural)[0]
+    const pos = wRacks.get(rack)!
+    const position = pos.has(p) ? p : [...pos.keys()].sort(sortNatural)[0]
+    onChange(pos.get(position)!.locationId)
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2" dir="ltr">
-      <Field label={t.fields.warehouse}>
-        <Select value={warehouse ?? ""} onValueChange={(w) => pick(w)}>
-          <SelectTrigger className="h-11 w-full">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            {[...tree.keys()].sort(sortNatural).map((w) => (
-              <SelectItem key={w} value={w}>
-                {w}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label={t.fields.rack}>
-        <Select
-          value={rack ?? ""}
-          disabled={!warehouse}
-          onValueChange={(s) => warehouse && pick(warehouse, s)}
-        >
-          <SelectTrigger className="h-11 w-full">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            {[...(tree.get(warehouse ?? "")?.keys() ?? [])].sort(sortNatural).map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label={t.fields.position}>
-        <Select
-          value={current?.position ?? ""}
-          disabled={!rack}
-          onValueChange={(p) => warehouse && rack && pick(warehouse, rack, p)}
-        >
-          <SelectTrigger className="h-11 w-full">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            {[...(tree.get(warehouse ?? "")?.get(rack ?? "") ?? [])].sort(sortNatural).map((p) => (
-              <SelectItem key={p} value={p}>
-                {p}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+    <div className="flex flex-col gap-1.5" dir="ltr">
+      <div className="grid grid-cols-3 px-1 text-center text-xs font-medium text-muted-foreground">
+        <span>{t.fields.warehouse}</span>
+        <span>{t.fields.rack}</span>
+        <span>{t.fields.position}</span>
+      </div>
+      <WheelPickerWrapper>
+        <WheelPicker
+          options={options(tree.keys())}
+          value={current.warehouse}
+          onValueChange={(w) => pick(w, current.rack, current.position)}
+          optionItemHeight={40}
+          visibleCount={12}
+        />
+        <WheelPicker
+          options={options(racks.keys())}
+          value={current.rack}
+          onValueChange={(r) => pick(current.warehouse, r, current.position)}
+          optionItemHeight={40}
+          visibleCount={12}
+        />
+        <WheelPicker
+          options={options(positions.keys())}
+          value={current.position}
+          onValueChange={(p) => pick(current.warehouse, current.rack, p)}
+          optionItemHeight={40}
+          visibleCount={12}
+        />
+      </WheelPickerWrapper>
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      {children}
-    </div>
-  )
-}
-
+/** warehouse → rack → position → location */
 function buildTree(locations: WarehouseLocation[]) {
-  const tree = new Map<string, Map<string, string[]>>()
+  const tree = new Map<string, Map<string, Map<string, WarehouseLocation>>>()
   for (const l of locations) {
-    const shelves = tree.get(l.warehouse) ?? new Map<string, string[]>()
-    const positions = shelves.get(l.rack) ?? []
-    positions.push(l.position)
-    shelves.set(l.rack, positions)
-    tree.set(l.warehouse, shelves)
+    const racks = tree.get(l.warehouse) ?? new Map<string, Map<string, WarehouseLocation>>()
+    const positions = racks.get(l.rack) ?? new Map<string, WarehouseLocation>()
+    positions.set(l.position, l)
+    racks.set(l.rack, positions)
+    tree.set(l.warehouse, racks)
   }
   return tree
 }

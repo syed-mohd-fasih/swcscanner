@@ -216,16 +216,18 @@ function LocationSheet({
   const recent = recentLocations()
     .map((id) => locations.find((l) => l.locationId === id))
     .filter((l): l is WarehouseLocation => !!l)
-  const location = locations.find((l) => l.locationId === locationId)
+  // the wheels always show a location: the last one used, else the first
+  const chosenId = locationId ?? recent[0]?.locationId ?? locations[0]?.locationId ?? null
+  const location = locations.find((l) => l.locationId === chosenId)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl pb-[env(safe-area-inset-bottom)]">
-        <SheetHeader>
+        <SheetHeader className="mx-auto w-full max-w-[32rem]">
           <SheetTitle>{t.storage.chooseLocation}</SheetTitle>
           <SheetDescription>{fmt(t.storage.selected, { n: count })}</SheetDescription>
         </SheetHeader>
-        <div className="flex flex-col gap-4 px-4 pb-4">
+        <div className="mx-auto flex w-full max-w-[32rem] flex-col gap-4 px-4 pb-4">
           {recent.length > 0 && (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">{t.storage.recentLocations}</p>
@@ -233,7 +235,7 @@ function LocationSheet({
                 {recent.map((l) => (
                   <Button
                     key={l.locationId}
-                    variant={l.locationId === locationId ? "default" : "outline"}
+                    variant={l.locationId === chosenId ? "default" : "outline"}
                     className="h-11"
                     onClick={() => setLocationId(l.locationId)}
                   >
@@ -243,7 +245,7 @@ function LocationSheet({
               </div>
             </div>
           )}
-          <LocationSelector value={locationId} onChange={setLocationId} />
+          <LocationSelector value={chosenId} onChange={setLocationId} />
           <Button
             size="lg"
             className="h-12"

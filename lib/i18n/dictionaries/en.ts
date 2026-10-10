@@ -292,9 +292,9 @@ export const en = {
   locations: {
     title: "Locations",
     add: "Add locations",
-    addHelp: "Add a range: warehouse code, rack letters and position numbers.",
-    rackFrom: "Rack from",
-    rackTo: "Rack to",
+    addHelp: "Add one rack at a time: the warehouse code, the rack's letter, and the first and last numbers on the rack.",
+    tooMany: "At most {n} positions per add.",
+    none: "No locations yet. An admin adds them under Locations.",
     positionFrom: "Position from",
     positionTo: "Position to",
     confirmAdd: "Add {n} location(s)?",

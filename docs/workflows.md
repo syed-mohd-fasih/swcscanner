@@ -41,7 +41,7 @@ Received pieces wait here for a location.
 
 1. Tick a shipment to select all its pieces, or tap single pieces (e.g. 3/4).
 2. Tap **Choose location** in the bar at the bottom.
-3. Pick warehouse, rack and position, or tap one of your recent locations.
+3. Turn the three wheels (warehouse, rack, position), or tap one of your recent locations. The wheels start on the last location you used.
 4. Tap **Store N here**.
 
 Use **Refresh** to see pieces received by others since you opened the screen.
@@ -75,7 +75,7 @@ A piece that was received but not stored yet can't be release-scanned. Store it 
 - Admins can correct the data or clear a mismatch flag.
 
 **Configuration**
-- **Locations:** add ranges such as WH1, racks A–C, positions 1–10. Locations can be disabled but are never deleted.
+- **Locations:** add one rack at a time: warehouse (WH1), the rack's letter (any letter, e.g. K) and the first and last numbers on that rack (1–40), up to 500 per add. Locations can be disabled but are never deleted.
 - **Carriers:** see [Carriers and barcodes](carriers-and-barcodes.md).
 - **Users:** create accounts, reset passwords, change roles, disable users.
 

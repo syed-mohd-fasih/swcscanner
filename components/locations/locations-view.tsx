@@ -10,17 +10,22 @@ import { useLocations } from "@/components/providers/config-provider"
 import { useSession } from "@/components/providers/session-provider"
 import { Field } from "@/components/shared/fields"
 import { useConfirm } from "@/components/shared/mutation-confirm-dialog"
+import { Callout } from "@/components/shared/callout"
 import { PageHeader } from "@/components/shared/page-header"
 import { EmptyState, Ltr } from "@/components/shared/states"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { WAREHOUSE_CODE, type WarehouseLocation } from "@/domain/locations/types"
+import { locationIdFor, RACK_LETTER, WAREHOUSE_CODE, type WarehouseLocation } from "@/domain/locations/types"
 import { fmt, useI18n } from "@/lib/i18n/client"
 import { callAction } from "@/lib/submit-op"
 import { cn } from "@/lib/utils"
 
+/** POSITION_NUMBER allows up to 4 digits */
+const MAX_POSITION = 9999
+/** one add = one write per location; keeps a single add far below the daily write limit */
+const MAX_PER_ADD = 500
 const natural = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true })
 
 /** Predefined Warehouse → Shelf → Position dataset; admin-only changes. */
@@ -42,7 +47,7 @@ export function LocationsView() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t.locations.title} />
-      {isAdmin && <AddLocationsForm />}
+      {isAdmin && <AddLocationsForm existing={locations ?? []} />}
       {tree.size === 0 ? (
         <EmptyState />
       ) : (
@@ -116,25 +121,30 @@ function LocationChip({ location, editable }: { location: WarehouseLocation; edi
   )
 }
 
-function AddLocationsForm() {
+function AddLocationsForm({ existing }: { existing: WarehouseLocation[] }) {
   const { t } = useI18n()
   const router = useRouter()
   const confirm = useConfirm()
-  const [form, setForm] = useState({ warehouse: "", rackFrom: "A", rackTo: "A", positionFrom: "1", positionTo: "1" })
+  const [form, setForm] = useState({ warehouse: "", rack: "", positionFrom: "1", positionTo: "10" })
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
+  // one rack at a time: rack labels need not follow the alphabet, but the
+  // numbers on a rack always run continuously
   const specs = useMemo(() => {
     const out: { warehouse: string; rack: string; position: string }[] = []
     const warehouse = form.warehouse.trim().toUpperCase()
-    const [r1, r2] = [form.rackFrom, form.rackTo].map((v) => v.trim().toUpperCase())
+    const rack = form.rack.trim().toUpperCase()
     const [p1, p2] = [form.positionFrom, form.positionTo].map((v) => Number(v))
-    const letter = /^[A-Z]$/
-    if (!WAREHOUSE_CODE.test(warehouse) || !letter.test(r1) || !letter.test(r2) || r2 < r1) return out
-    if ([p1, p2].some((n) => !Number.isInteger(n) || n < 1) || p2 < p1) return out
-    for (let r = r1.charCodeAt(0); r <= r2.charCodeAt(0) && out.length <= 2000; r++)
-      for (let p = p1; p <= p2; p++) out.push({ warehouse, rack: String.fromCharCode(r), position: String(p) })
+    if (!WAREHOUSE_CODE.test(warehouse) || !RACK_LETTER.test(rack)) return out
+    if ([p1, p2].some((n) => !Number.isInteger(n) || n < 1 || n > MAX_POSITION) || p2 < p1) return out
+    if (p2 - p1 + 1 > MAX_PER_ADD) return out
+    // only positions not already there
+    const have = new Set(existing.map((l) => l.locationId))
+    for (let p = p1; p <= p2; p++)
+      if (!have.has(locationIdFor(warehouse, rack, String(p)))) out.push({ warehouse, rack, position: String(p) })
     return out
-  }, [form])
+  }, [form, existing])
+  const preview = specs.length > 0 ? `${specs[0].warehouse} / ${specs[0].rack}-${specs[0].position} … ${specs.at(-1)!.rack}-${specs.at(-1)!.position}` : null
 
   async function submit() {
     if (specs.length === 0) return
@@ -142,6 +152,7 @@ function AddLocationsForm() {
     const created = await callAction(t, () => addLocationsAction({ specs }))
     if (!created) return
     toast.success(`${t.items.corrected} (${created.length})`)
+    setForm((f) => ({ ...f, rack: "" }))
     router.refresh()
   }
 
@@ -152,26 +163,31 @@ function AddLocationsForm() {
         <p className="text-sm text-muted-foreground">{t.locations.addHelp}</p>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5" dir="ltr">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" dir="ltr">
           <Field label={t.fields.warehouse} htmlFor="l-w">
-            <Input id="l-w" maxLength={8} placeholder="WH1" className="h-11 uppercase" value={form.warehouse} onChange={set("warehouse")} />
+            <Input id="l-w" name="warehouse" maxLength={8} placeholder="WH1" autoComplete="off" className="uppercase" value={form.warehouse} onChange={set("warehouse")} />
           </Field>
-          <Field label={t.locations.rackFrom} htmlFor="l-r1">
-            <Input id="l-r1" maxLength={1} className="h-11 uppercase" value={form.rackFrom} onChange={set("rackFrom")} />
-          </Field>
-          <Field label={t.locations.rackTo} htmlFor="l-r2">
-            <Input id="l-r2" maxLength={1} className="h-11 uppercase" value={form.rackTo} onChange={set("rackTo")} />
+          <Field label={t.fields.rack} htmlFor="l-r">
+            <Input id="l-r" name="rack" maxLength={2} placeholder="A" autoComplete="off" className="uppercase" value={form.rack} onChange={set("rack")} />
           </Field>
           <Field label={t.locations.positionFrom} htmlFor="l-p1">
-            <Input id="l-p1" type="number" min={1} className="h-11" value={form.positionFrom} onChange={set("positionFrom")} />
+            <Input id="l-p1" name="positionFrom" type="number" inputMode="numeric" min={1} max={MAX_POSITION} value={form.positionFrom} onChange={set("positionFrom")} />
           </Field>
           <Field label={t.locations.positionTo} htmlFor="l-p2">
-            <Input id="l-p2" type="number" min={1} className="h-11" value={form.positionTo} onChange={set("positionTo")} />
+            <Input id="l-p2" name="positionTo" type="number" inputMode="numeric" min={1} max={MAX_POSITION} value={form.positionTo} onChange={set("positionTo")} />
           </Field>
         </div>
-        <Button className="mt-3" disabled={specs.length === 0} onClick={() => void submit()}>
-          {t.app.add} ({specs.length})
-        </Button>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Button disabled={specs.length === 0} onClick={() => void submit()}>
+            {t.app.add} ({specs.length})
+          </Button>
+          {Number(form.positionTo) - Number(form.positionFrom) + 1 > MAX_PER_ADD && (
+            <Callout tone="warning" className="w-full">{fmt(t.locations.tooMany, { n: MAX_PER_ADD })}</Callout>
+          )}
+          {preview && (
+            <Ltr className="text-sm font-medium text-primary-ink animate-in fade-in-0">{preview}</Ltr>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
